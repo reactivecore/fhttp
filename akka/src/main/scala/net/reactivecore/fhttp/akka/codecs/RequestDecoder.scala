@@ -42,9 +42,9 @@ object RequestDecoder {
     type Output = OutputT
   }
 
-  def apply[T](implicit rd: RequestDecoder[T]): RequestDecoder[T] = rd
+  def apply[T](implicit rd: RequestDecoder[T]): Aux[T, rd.Output] = rd
 
-  private def make[Step, Producing](f: Step => RequestContext => Future[(RequestContext, Producing)]) = new RequestDecoder[Step] {
+  private def make[Step, Producing](f: Step => RequestContext => Future[(RequestContext, Producing)]): Aux[Step, Producing] = new RequestDecoder[Step] {
     override type Output = Producing
 
     override def build(s: Step): RequestContext => Future[(RequestContext, Producing)] = {

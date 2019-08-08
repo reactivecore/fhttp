@@ -21,9 +21,9 @@ object SimpleArgumentLister {
     type PlainType = P0
   }
 
-  def apply[H <: HList](implicit h: SimpleArgumentLister[H]) = h
+  def apply[H <: HList](implicit h: SimpleArgumentLister[H]): Aux[H, h.PlainType] = h
 
-  implicit def single[X] = new SimpleArgumentLister[X :: HNil] {
+  implicit def single[X]: Aux[X :: HNil, X] = new SimpleArgumentLister[X :: HNil] {
     type PlainType = X
 
     override def lift(t: X): X :: HNil = t :: HNil
@@ -35,7 +35,7 @@ object SimpleArgumentLister {
     implicit
     tupler: Tupler.Aux[H, T],
     generic: Generic.Aux[T, H]
-  ) = new SimpleArgumentLister[H] {
+  ): Aux[H, T] = new SimpleArgumentLister[H] {
     type PlainType = T
 
     override def lift(t: T): H = generic.to(t)

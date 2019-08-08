@@ -40,7 +40,7 @@ class AkkaTest extends TestBase {
     )
 
     val FileDownload = add(
-      get("downoad")
+      get("download")
         .expecting(Input.ExtraPath)
         .responding(Output.Binary)
     )
@@ -101,6 +101,7 @@ class AkkaTest extends TestBase {
     val response4 = await(client.uploadClient("application/octet-stream", Source(
       List(ByteString("a"), ByteString("b"))
     )))
+
     response4 shouldBe "application/octet-stream --> a,b"
 
     val response5: (String, Source[ByteString, _]) = await(client.downloadClient("path"))

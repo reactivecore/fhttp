@@ -3,7 +3,6 @@ package com.example.helloworld
 import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import net.reactivecore.fhttp.akka.{ ApiServer, RouteBuilder }
-import shapeless._
 
 import scala.concurrent.{ ExecutionContext, Future }
 

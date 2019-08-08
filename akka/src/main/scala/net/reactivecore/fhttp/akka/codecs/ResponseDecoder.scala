@@ -45,9 +45,9 @@ object ResponseDecoder {
 
   type Fn[Output] = (HttpResponse, DecodingContext) => Future[Output]
 
-  def apply[Step](implicit rd: ResponseDecoder[Step]) = rd
+  def apply[Step](implicit rd: ResponseDecoder[Step]): Aux[Step, rd.Output] = rd
 
-  def make[Step, Producing](f: Step => (HttpResponse, DecodingContext) => Future[Producing]) = new ResponseDecoder[Step] {
+  def make[Step, Producing](f: Step => (HttpResponse, DecodingContext) => Future[Producing]): Aux[Step, Producing] = new ResponseDecoder[Step] {
     override type Output = Producing
 
     override def build(step: Step): (HttpResponse, DecodingContext) => Future[Producing] = {

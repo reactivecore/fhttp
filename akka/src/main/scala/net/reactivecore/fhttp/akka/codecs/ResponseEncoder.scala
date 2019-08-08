@@ -33,9 +33,9 @@ object ResponseEncoder {
 
   type Fn[Input] = (HttpResponse, Input) => HttpResponse
 
-  def apply[T](implicit rb: ResponseEncoder[T]): ResponseEncoder[T] = rb
+  def apply[T](implicit rb: ResponseEncoder[T]): Aux[T, rb.Input] = rb
 
-  private def make[Step, Consuming](f: Step => (HttpResponse, Consuming) => HttpResponse) = new ResponseEncoder[Step] {
+  private def make[Step, Consuming](f: Step => (HttpResponse, Consuming) => HttpResponse): Aux[Step, Consuming] = new ResponseEncoder[Step] {
     override type Input = Consuming
 
     override def build(step: Step): (HttpResponse, Consuming) => HttpResponse = {

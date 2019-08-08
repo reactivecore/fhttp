@@ -38,9 +38,9 @@ object RequestEncoder {
     type Input = InputT
   }
 
-  def apply[T](implicit rb: RequestEncoder[T]): RequestEncoder[T] = rb
+  def apply[T](implicit rb: RequestEncoder[T]): Aux[T, rb.Input] = rb
 
-  private def make[Step, Consuming](f: Step => (HttpRequest, Consuming) => HttpRequest) = new RequestEncoder[Step] {
+  private def make[Step, Consuming](f: Step => (HttpRequest, Consuming) => HttpRequest): Aux[Step, Consuming] = new RequestEncoder[Step] {
     override type Input = Consuming
 
     override def build(step: Step): (HttpRequest, Consuming) => HttpRequest = {

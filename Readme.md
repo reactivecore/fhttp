@@ -42,5 +42,5 @@ Features
 TODO
 ----
 
-- IntelliJ doesn't like the typing anymore
-- Testing 
+- Testing
+- Extending 
