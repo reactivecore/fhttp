@@ -23,7 +23,7 @@ trait Mapping[T] extends PureMapping[ByteBuffer, T] {
 }
 
 object TextMapping extends Mapping[String] {
-  override val contentType: String = "text/html; charset=utf-8"
+  override val contentType: String = "text/plain; charset=utf-8"
 
   override def encode(value: String): ByteBuffer = ByteBuffer.wrap(value.getBytes(StandardCharsets.UTF_8))
 
