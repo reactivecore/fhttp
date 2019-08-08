@@ -3,11 +3,14 @@ package net.reactivecore.fhttp.akka
 import akka.stream.scaladsl.Sink
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
+import io.circe.generic.JsonCodec
 import net.reactivecore.fhttp.{ ApiBuilder, Input, Output }
 
 import scala.concurrent.Future
 import shapeless._
+
 import scala.language.reflectiveCalls
+import io.circe.syntax._
 
 class AkkaTest extends TestBase {
 
@@ -44,6 +47,12 @@ class AkkaTest extends TestBase {
         .expecting(Input.ExtraPath)
         .responding(Output.Binary)
     )
+
+    val QueryParameters = add(
+      get("query")
+        .expecting(Input.circeQuery[QueryParameters])
+        .responding(Output.circe[QueryParameters]())
+    )
   }
 
   it should "server this simple examples" in {
@@ -72,6 +81,10 @@ class AkkaTest extends TestBase {
 
         RouteBuilder.bind(Api1.FileDownload).to { fileName =>
           Future.successful("plain/text" -> Source(List(ByteString(fileName), ByteString("A Nice text file"))))
+        },
+
+        RouteBuilder.bind(Api1.QueryParameters).to { input =>
+          Future.successful(input)
         }
       )
     )
@@ -86,6 +99,8 @@ class AkkaTest extends TestBase {
       val uploadClient = prepare(Api1.FileUpload)
 
       val downloadClient = prepare(Api1.FileDownload)
+
+      val queryPrepared = prepare(Api1.QueryParameters)
 
     }
 
@@ -106,6 +121,12 @@ class AkkaTest extends TestBase {
 
     val response5: (String, Source[ByteString, _]) = await(client.downloadClient("path"))
     collectByteSource(response5._2).utf8String shouldBe "pathA Nice text file"
+
+    val response6 = await(client.queryPrepared(QueryParameters(a = "Hello", b = None)))
+    response6 shouldBe QueryParameters("Hello", None)
+
+    val response7 = await(client.queryPrepared(QueryParameters(a = "Hello", b = Some("foo"))))
+    response7 shouldBe QueryParameters("Hello", Some("foo"))
   }
 
 }

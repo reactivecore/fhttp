@@ -49,7 +49,8 @@ lazy val akka = (project in file("akka"))
 
         "org.scalatest" %% "scalatest" % scalaTestVersion % Test
       ),
-      scalariformSettings
+      scalariformSettings,
+      paradiseSupport
     )
 
 lazy val example = (project in file("example"))

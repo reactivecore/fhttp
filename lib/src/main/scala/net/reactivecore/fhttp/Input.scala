@@ -1,6 +1,6 @@
 package net.reactivecore.fhttp
 
-import io.circe.{ Decoder, Encoder }
+import io.circe.{ Decoder, Encoder, ObjectEncoder }
 
 /**
  * Describes an Input Transformation
@@ -19,6 +19,12 @@ object Input {
   case object Binary extends TypedInput[(String, Array[Byte])]
   case class AddQueryParameter(name: String) extends TypedInput[String]
 
+  /** Parse query parameters into a circe-extended class, values are converted into strings before. */
+  case class QueryParameterMap[T](mapping: PureMapping[Map[String, String], T]) extends TypedInput[T]
+
   def text(limit: Option[Long] = None): Mapped[String] = Mapped(TextMapping, limit)
   def circe[T](limit: Option[Long] = None)(implicit encoder: Encoder[T], decoder: Decoder[T]): Mapped[T] = Mapped(CirceJsonMapping[T], limit)
+  def circeQuery[T](implicit encoder: ObjectEncoder[T], decoder: Decoder[T]) = QueryParameterMap(
+    CirceJsonStringMapping()
+  )
 }

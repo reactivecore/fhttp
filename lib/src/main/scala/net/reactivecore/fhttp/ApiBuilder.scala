@@ -18,6 +18,18 @@ trait ApiBuilder {
     )
   }
 
+  protected def delete(path: String): ApiCallBuilder[HNil, HNil] = {
+    empty(
+      ApiHeader("DELETE", path)
+    )
+  }
+
+  // Shortcut to input
+  protected def input: Input.type = Input
+
+  // Shortcut to input
+  protected def output: Output.type = Output
+
   private def empty(header: ApiHeader): ApiCallBuilder[HNil, HNil] = {
     ApiCallBuilder(ApiCall(header, HNil, HNil))
   }

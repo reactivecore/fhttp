@@ -93,6 +93,18 @@ object RequestDecoder {
   }
   }
 
+  implicit def queryParameterMapDecoder[T] = make[Input.QueryParameterMap[T], T] { step => requestContext => {
+    val queryParameters = requestContext.request.uri.query().toMap
+    step.mapping.decode(queryParameters) match {
+      case Left(error) =>
+        // TODO: Better handling
+        throw new IllegalArgumentException(s"Could not parse request ${error}")
+      case Right(ok) =>
+        Future.successful(requestContext -> ok)
+    }
+  }
+  }
+
   implicit val nilDecoder = make[HNil, HNil] { _ => requestContext => {
     Future.successful(requestContext -> HNil)
   }

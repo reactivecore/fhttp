@@ -79,6 +79,14 @@ object RequestEncoder {
   }
   }
 
+  implicit def encodeQueryParameterMap[T] = make[Input.QueryParameterMap[T], T] { step => (request, value) => {
+    val encoded = step.mapping.encode(value)
+    val extended: Query = Query(request.uri.query() ++ encoded: _*)
+    val uri = request.uri.withQuery(extended)
+    request.copy(uri = uri)
+  }
+  }
+
   implicit val encodeNil = makeSimple[HNil, HNil] {
     case (request, _, __) =>
       request
