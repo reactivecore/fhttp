@@ -12,15 +12,14 @@ import scala.collection.immutable
 
 /** Dummy server for testing Web APis. */
 class ApiServer(
-    routes: immutable.Seq[Route],
+    route: Route,
     interface: String = "localhost",
     port: Int = 9000
 )(implicit as: ActorSystem, materializer: Materializer) {
   private val HttpUpDownTimeout = 60.seconds
 
   private val http = Http()
-  private val combinedRoute: Route = concat(routes: _*)
-  private val bindFuture = http.bindAndHandle(combinedRoute, interface, port)
+  private val bindFuture = http.bindAndHandle(route, interface, port)
   private val bindResult = Await.result(bindFuture, HttpUpDownTimeout)
 
   println(s"Server listening on ${interface}:${port}")

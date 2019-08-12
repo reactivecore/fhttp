@@ -56,37 +56,42 @@ class AkkaTest extends TestBase {
   }
 
   it should "server this simple examples" in {
-    val server = new ApiServer(
-      List(
-        RouteBuilder.bind(Api1.HelloWorld).to(_ => Future.successful("Hello World")),
+    val route = new ApiServerRoute {
+      bind(Api1.HelloWorld).to { _ =>
+        Future.successful("Hello World")
+      }
 
-        RouteBuilder.bind(Api1.ErrorResponse).to(_ => Future.successful(
+      bind(Api1.ErrorResponse).to { _ =>
+        Future.successful(
           Left(401 -> "Forbidden")
-        )),
+        )
+      }
 
-        RouteBuilder.bind(Api1.PathDependent).to(x => Future.successful(
-          x
-        )),
+      bind(Api1.PathDependent).to { x =>
+        Future.successful(x)
+      }
 
-        RouteBuilder.bind(Api1.FileUpload).to { x =>
-          val contentType = x._1: String
-          val dataSource = x._2: Source[ByteString, _]
+      bind(Api1.FileUpload).to { x =>
+        val contentType = x._1: String
+        val dataSource = x._2: Source[ByteString, _]
 
-          dataSource.map { bs =>
-            bs.utf8String
-          }.runWith(Sink.seq).map { result =>
-            contentType + " --> " + result.mkString(",")
-          }
-        },
-
-        RouteBuilder.bind(Api1.FileDownload).to { fileName =>
-          Future.successful("plain/text" -> Source(List(ByteString(fileName), ByteString("A Nice text file"))))
-        },
-
-        RouteBuilder.bind(Api1.QueryParameters).to { input =>
-          Future.successful(input)
+        dataSource.map { bs =>
+          bs.utf8String
+        }.runWith(Sink.seq).map { result =>
+          contentType + " --> " + result.mkString(",")
         }
-      )
+      }
+
+      bind(Api1.FileDownload).to { fileName =>
+        Future.successful("plain/text" -> Source(List(ByteString(fileName), ByteString("A Nice text file"))))
+      }
+
+      bind(Api1.QueryParameters).to { input =>
+        Future.successful(input)
+      }
+    }
+    val server = new ApiServer(
+      route
     )
 
     val client = new ApiClient(http, "http://localhost:9000") {
