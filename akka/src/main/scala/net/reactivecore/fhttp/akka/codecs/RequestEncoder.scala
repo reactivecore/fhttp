@@ -2,7 +2,7 @@ package net.reactivecore.fhttp.akka.codecs
 
 import akka.http.javadsl.model.RequestEntity
 import akka.http.scaladsl.model.Uri.Query
-import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpHeader, HttpRequest, Multipart}
+import akka.http.scaladsl.model.{ ContentTypes, HttpEntity, HttpHeader, HttpRequest, Multipart }
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import io.circe.Encoder
@@ -99,7 +99,8 @@ object RequestEncoder {
   }
 
   implicit def encodeMultipart[Parts <: HList, PartArgumentsH <: HList, PartArguments](
-    implicit aux: MultipartEncoder.Aux[Parts, PartArgumentsH],
+    implicit
+    aux: MultipartEncoder.Aux[Parts, PartArgumentsH],
     simpleArgumentLister: SimpleArgumentLister.Aux[PartArgumentsH, PartArguments]
   ) = make[Input.Multipart[Parts], PartArguments] { step =>
     val prepared = aux.build(step.parts)

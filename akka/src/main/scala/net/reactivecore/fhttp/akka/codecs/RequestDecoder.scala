@@ -46,10 +46,10 @@ object RequestDecoder {
 
   def apply[T](implicit rd: RequestDecoder[T]): Aux[T, rd.Output] = rd
 
-  private def make[Step, Producing](f: Step => RequestContext => Future[(RequestContext, Producing)]): Aux[Step, Producing] = new RequestDecoder[Step] {
+  private def make[Step, Producing](f: Step => Fn[Producing]): Aux[Step, Producing] = new RequestDecoder[Step] {
     override type Output = Producing
 
-    override def build(s: Step): RequestContext => Future[(RequestContext, Producing)] = {
+    override def build(s: Step): Fn[Output] = {
       f(s)
     }
   }
@@ -117,18 +117,24 @@ object RequestDecoder {
   }
   }
 
+  import scala.concurrent.duration._
+  private val MultipartBufferingTimeout = 60.seconds // TODO: Make this changeable.
+
   implicit def multipartDecoder[T <: HList, ProducingH <: HList, Producing](
-    implicit multipartDecoder: MultipartDecoder.Aux[T, ProducingH],
+    implicit
+    multipartDecoder: MultipartDecoder.Aux[T, ProducingH],
     argumentLister: SimpleArgumentLister.Aux[ProducingH, Producing]
   ) = make[Input.Multipart[T], Producing] { step =>
     val built = multipartDecoder.build(step.parts)
     requestContext => {
       import requestContext._
-      Unmarshal(requestContext.request.entity).to[akka.http.scaladsl.model.Multipart.FormData].flatMap { fields =>
-        built(requestContext, fields).map { values =>
-          requestContext -> argumentLister.unlift(values)
-        }
-      }
+      for {
+        fields <- Unmarshal(requestContext.request.entity).to[akka.http.scaladsl.model.Multipart.FormData]
+        // We are buffering the request on server side
+        // Otherwise it's tricky to decode the single form fields differently.
+        strictForm <- fields.toStrict(MultipartBufferingTimeout)
+        values <- built(requestContext, strictForm)
+      } yield requestContext -> argumentLister.unlift(values)
     }
   }
 

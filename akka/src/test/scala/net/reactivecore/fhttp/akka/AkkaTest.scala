@@ -4,7 +4,7 @@ import akka.stream.scaladsl.Sink
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import net.reactivecore.fhttp.akka.codecs.MultipartEncoder
-import net.reactivecore.fhttp.{ApiBuilder, Input, Output}
+import net.reactivecore.fhttp.{ ApiBuilder, Input, Output }
 
 import scala.concurrent.Future
 import shapeless._
@@ -59,7 +59,7 @@ class AkkaTest extends TestBase {
         .responding(Output.text())
     )
 
-    val Multipart = add (
+    val Multipart = add(
       post("multipart")
         .expecting(Input.Multipart.make(
           Input.Multipart.MultipartText("text1"),
@@ -108,9 +108,10 @@ class AkkaTest extends TestBase {
         Future.successful(input)
       }
 
-      bind(Api1.Multipart).to { case(text, (contentType, data)) =>
-        val collected = collectByteSource(data).utf8String
-        Future.successful(text + "," + contentType + "," + collected)
+      bind(Api1.Multipart).to {
+        case (text, (contentType, data)) =>
+          val collected = collectByteSource(data).utf8String
+          Future.successful(text + "," + contentType + "," + collected)
       }
     }
     val server = new ApiServer(

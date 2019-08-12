@@ -1,6 +1,6 @@
 package net.reactivecore.fhttp
 
-import io.circe.{Decoder, Encoder, ObjectEncoder}
+import io.circe.{ Decoder, Encoder, ObjectEncoder }
 import shapeless._
 
 /**
@@ -31,7 +31,7 @@ object Input {
   /**
    * Multipart input
    * (Constructed by [[Multipart.make]] functions )
-   * */
+   */
   case class Multipart[Parts <: HList](parts: Parts) extends Input
 
   trait MultipartPart
