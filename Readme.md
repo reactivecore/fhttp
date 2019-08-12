@@ -49,5 +49,5 @@ TODO
 - Support for optional values
 - Reporting invalid calls instead of throwing an Exceptions
 - Extending
-- Multi partdecoding on Akka Server side buffers the request in Memory.
+- Multi part decoding on Akka Server side buffers the request in Memory.
 
