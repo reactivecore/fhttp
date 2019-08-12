@@ -25,6 +25,6 @@ class SimpleArgumentListerTest extends FlatSpec with Matchers {
     lifted("Hello") shouldBe 5
 
     val unlifted = makeUnlifter(giver)
-    unlifted(5) shouldBe ("5", 6)
+    unlifted(5) shouldBe (6, "5")
   }
 }

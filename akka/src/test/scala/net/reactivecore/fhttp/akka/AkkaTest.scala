@@ -74,6 +74,7 @@ class AkkaTest extends TestBase {
     val MappedQueryParameter = add(
       get("foo")
         .expecting(Input.MappedInput(Input.AddQueryParameter("number"), intMapping))
+        .expecting(Input.AddQueryParameter("string"))
         .responding(Output.text())
     )
   }
@@ -123,8 +124,9 @@ class AkkaTest extends TestBase {
           Future.successful(text + "," + contentType + "," + collected)
       }
 
-      bind(Api1.MappedQueryParameter).to { x =>
-        Future.successful((x + 1).toString)
+      bind(Api1.MappedQueryParameter).to {
+        case (x, y) =>
+          Future.successful(y + (x + 1).toString)
       }
     }
     val server = new ApiServer(
@@ -185,8 +187,8 @@ class AkkaTest extends TestBase {
 
     response9 shouldBe "foo,application/octet-stream,abccde"
 
-    val response10 = await(client.mappedQueryParameter(10))
-    response10 shouldBe "11"
+    val response10 = await(client.mappedQueryParameter((10, "Hello")))
+    response10 shouldBe "Hello11"
   }
 
 }
