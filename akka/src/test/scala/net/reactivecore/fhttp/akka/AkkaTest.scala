@@ -108,12 +108,10 @@ class AkkaTest extends TestBase {
         Future.successful(input)
       }
 
-      /*
-      bind(Api1.Multipart).to { input =>
-        ???
+      bind(Api1.Multipart).to { case(text, (contentType, data)) =>
+        val collected = collectByteSource(data).utf8String
+        Future.successful(text + "," + contentType + "," + collected)
       }
-
-       */
     }
     val server = new ApiServer(
       route
@@ -165,10 +163,10 @@ class AkkaTest extends TestBase {
     response8 shouldBe "boom!"
 
     val response9 = await(client.multipart.apply(
-      ("foo", "application/octet-stream" -> Source(List(ByteString("abc"))))
+      ("foo", "application/octet-stream" -> Source(List(ByteString("abc"), ByteString("cde"))))
     ))
 
-    response9 shouldBe "foo,application/octet-stream,abc"
+    response9 shouldBe "foo,application/octet-stream,abccde"
   }
 
 }

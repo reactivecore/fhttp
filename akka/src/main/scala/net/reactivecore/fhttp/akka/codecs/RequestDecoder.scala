@@ -1,5 +1,6 @@
 package net.reactivecore.fhttp.akka.codecs
 
+import akka.http.scaladsl.common.StrictForm
 import akka.http.scaladsl.server.RequestContext
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.stream.scaladsl.Source
@@ -7,6 +8,7 @@ import akka.util.ByteString
 import io.circe.Decoder
 import net.reactivecore.fhttp.Input
 import net.reactivecore.fhttp.akka.AkkaHttpHelper
+import net.reactivecore.fhttp.helper.SimpleArgumentLister
 import shapeless._
 
 import scala.concurrent.Future
@@ -113,6 +115,21 @@ object RequestDecoder {
     }
     Future.successful(requestContext -> headerValue)
   }
+  }
+
+  implicit def multipartDecoder[T <: HList, ProducingH <: HList, Producing](
+    implicit multipartDecoder: MultipartDecoder.Aux[T, ProducingH],
+    argumentLister: SimpleArgumentLister.Aux[ProducingH, Producing]
+  ) = make[Input.Multipart[T], Producing] { step =>
+    val built = multipartDecoder.build(step.parts)
+    requestContext => {
+      import requestContext._
+      Unmarshal(requestContext.request.entity).to[akka.http.scaladsl.model.Multipart.FormData].flatMap { fields =>
+        built(requestContext, fields).map { values =>
+          requestContext -> argumentLister.unlift(values)
+        }
+      }
+    }
   }
 
   implicit val nilDecoder = make[HNil, HNil] { _ => requestContext => {
