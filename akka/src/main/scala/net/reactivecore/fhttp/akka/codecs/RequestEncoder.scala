@@ -2,11 +2,12 @@ package net.reactivecore.fhttp.akka.codecs
 
 import akka.http.javadsl.model.RequestEntity
 import akka.http.scaladsl.model.Uri.Query
-import akka.http.scaladsl.model.{ ContentTypes, HttpEntity, HttpRequest }
+import akka.http.scaladsl.model.{ ContentTypes, HttpEntity, HttpHeader, HttpRequest }
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import io.circe.Encoder
 import RequestEncoder.Fn
+import akka.http.scaladsl.model.HttpHeader.ParsingResult
 import net.reactivecore.fhttp.Input
 import net.reactivecore.fhttp.akka.AkkaHttpHelper
 import shapeless._
@@ -85,6 +86,15 @@ object RequestEncoder {
     val uri = request.uri.withQuery(extended)
     request.copy(uri = uri)
   }
+  }
+
+  implicit val encodeAddHeader = make[Input.AddHeader, String] { step => (request, value) =>
+    val encoded = HttpHeader.parse(step.name, value) match {
+      case v: ParsingResult.Ok => v.header
+      case e: ParsingResult.Error =>
+        throw new IllegalArgumentException(s"Invalid header ${e.errors}")
+    }
+    request.addHeader(encoded)
   }
 
   implicit val encodeNil = makeSimple[HNil, HNil] {

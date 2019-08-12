@@ -105,6 +105,16 @@ object RequestDecoder {
   }
   }
 
+  implicit val headerValueDecoder = make[Input.AddHeader, String] { step => requestContext => {
+    val headerValue = requestContext.request.headers.collectFirst {
+      case h if h.name() == step.name => h.value()
+    }.getOrElse {
+      throw new IllegalArgumentException(s"Missing expected header ${step.name}")
+    }
+    Future.successful(requestContext -> headerValue)
+  }
+  }
+
   implicit val nilDecoder = make[HNil, HNil] { _ => requestContext => {
     Future.successful(requestContext -> HNil)
   }

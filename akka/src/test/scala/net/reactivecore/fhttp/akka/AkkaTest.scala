@@ -3,14 +3,12 @@ package net.reactivecore.fhttp.akka
 import akka.stream.scaladsl.Sink
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
-import io.circe.generic.JsonCodec
 import net.reactivecore.fhttp.{ ApiBuilder, Input, Output }
 
 import scala.concurrent.Future
 import shapeless._
 
 import scala.language.reflectiveCalls
-import io.circe.syntax._
 
 class AkkaTest extends TestBase {
 
@@ -53,6 +51,12 @@ class AkkaTest extends TestBase {
         .expecting(Input.circeQuery[QueryParameters])
         .responding(Output.circe[QueryParameters]())
     )
+
+    val HeaderParameter = add(
+      get("header_parameter")
+        .expecting(Input.AddHeader("header1"))
+        .responding(Output.text())
+    )
   }
 
   it should "server this simple examples" in {
@@ -89,6 +93,10 @@ class AkkaTest extends TestBase {
       bind(Api1.QueryParameters).to { input =>
         Future.successful(input)
       }
+
+      bind(Api1.HeaderParameter).to { input =>
+        Future.successful(input)
+      }
     }
     val server = new ApiServer(
       route
@@ -107,6 +115,7 @@ class AkkaTest extends TestBase {
 
       val queryPrepared = prepare(Api1.QueryParameters)
 
+      val headerParameter = prepare(Api1.HeaderParameter)
     }
 
     val response = await(client.helloWorldPrepared(HNil))
@@ -132,6 +141,9 @@ class AkkaTest extends TestBase {
 
     val response7 = await(client.queryPrepared(QueryParameters(a = "Hello", b = Some("foo"))))
     response7 shouldBe QueryParameters("Hello", Some("foo"))
+
+    val response8 = await(client.headerParameter.apply("boom!"))
+    response8 shouldBe "boom!"
   }
 
 }

@@ -45,5 +45,6 @@ TODO
 - Testing
 - Better error handling
 - Better path handling
-- More HTTP Methods instead of `GET` and `POST`
-- Extending 
+- More HTTP Methods instead of `GET`, `POST` and `DELETE`
+- Support for optional values
+- Extending
