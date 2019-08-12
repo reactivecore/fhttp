@@ -30,7 +30,7 @@ object Input {
 
   /**
    * Multipart input
-   * (Constructed by [[Multipart.make]] functions )
+   * (Constructed by make Methods in [[Multipart$]] functions )
    */
   case class Multipart[Parts <: HList](parts: Parts) extends Input
 
