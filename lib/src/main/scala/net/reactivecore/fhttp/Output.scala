@@ -12,10 +12,17 @@ trait Output
 trait TypedOutput[T] extends Output
 
 object Output {
-  case class Mapped[T](mapping: Mapping[T], limit: Option[Long] = None) extends TypedOutput[T]
-  case object Binary extends TypedOutput[(String, Array[Byte])]
+  /** Mapped Entity Payload. */
+  case class MappedPayload[T](mapping: Mapping[T], limit: Option[Long] = None) extends TypedOutput[T]
+  /**
+   * Binary content
+   * Resulting type is binding dependent, but should contain content type and byte data.
+   */
+  case object Binary extends Output
+
+  /** Splits Error and success case into an either. The failure case should include the HTTP Status code. */
   case class ErrorSuccess[Failure <: Output, Success <: Output](f: Failure, s: Success) extends TypedOutput[Either[_, _]]
 
-  def text(limit: Option[Long] = None): Mapped[String] = Mapped(TextMapping, limit)
-  def circe[T](limit: Option[Long] = None)(implicit encoder: Encoder[T], decoder: Decoder[T]): Mapped[T] = Mapped(CirceJsonMapping[T], limit)
+  def text(limit: Option[Long] = None): MappedPayload[String] = MappedPayload(TextMapping, limit)
+  def circe[T](limit: Option[Long] = None)(implicit encoder: Encoder[T], decoder: Decoder[T]): MappedPayload[T] = MappedPayload(CirceJsonMapping[T], limit)
 }

@@ -6,8 +6,8 @@ import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import io.circe.Decoder
-import net.reactivecore.fhttp.Input
-import net.reactivecore.fhttp.akka.AkkaHttpHelper
+import net.reactivecore.fhttp.{ Input, TypedInput }
+import net.reactivecore.fhttp.akka.{ AkkaHttpHelper, codecs }
 import net.reactivecore.fhttp.helper.SimpleArgumentLister
 import shapeless._
 
@@ -67,7 +67,7 @@ object RequestDecoder {
     )
   }
 
-  implicit def mapped[T] = make[Input.Mapped[T], T] { step =>
+  implicit def mapped[T] = make[Input.MappedPayload[T], T] { step =>
     implicit val unmarshaller = AkkaHttpHelper.unmarshallerFromMapping[T](step.mapping)
     requestContext => {
       import requestContext._
@@ -135,6 +135,23 @@ object RequestDecoder {
         strictForm <- fields.toStrict(MultipartBufferingTimeout)
         values <- built(requestContext, strictForm)
       } yield requestContext -> argumentLister.unlift(values)
+    }
+  }
+
+  implicit def encodeMapped[A, B, T <: TypedInput[A], V](
+    implicit
+    aux: RequestDecoder.Aux[T, A]
+  ) = make[Input.MappedInput[A, B, T], B] { step =>
+    val built = aux.build(step.original)
+    requestContext => {
+      import requestContext._
+      built(requestContext).map {
+        case (context, value) =>
+          val encodedValue = step.mapping.encode(value).getOrElse {
+            throw new IllegalArgumentException("Could not encode value")
+          }
+          context -> encodedValue
+      }
     }
   }
 

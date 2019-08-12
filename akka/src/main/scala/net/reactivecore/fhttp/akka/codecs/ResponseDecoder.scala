@@ -55,7 +55,7 @@ object ResponseDecoder {
     }
   }
 
-  implicit def decodeMapped[T] = make[Output.Mapped[T], T] { step =>
+  implicit def decodeMapped[T] = make[Output.MappedPayload[T], T] { step =>
     implicit val unmapper = AkkaHttpHelper.unmarshallerFromMapping(step.mapping)
     (response, context) => {
       import context._

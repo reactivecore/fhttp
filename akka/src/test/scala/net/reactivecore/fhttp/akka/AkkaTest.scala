@@ -1,15 +1,13 @@
 package net.reactivecore.fhttp.akka
 
-import akka.stream.scaladsl.Sink
-import akka.stream.scaladsl.Source
+import akka.stream.scaladsl.{ Sink, Source }
 import akka.util.ByteString
-import net.reactivecore.fhttp.akka.codecs.MultipartEncoder
 import net.reactivecore.fhttp.{ ApiBuilder, Input, Output }
-
-import scala.concurrent.Future
 import shapeless._
 
+import scala.concurrent.Future
 import scala.language.reflectiveCalls
+import scala.util.Try
 
 class AkkaTest extends TestBase {
 
@@ -67,6 +65,17 @@ class AkkaTest extends TestBase {
         ))
         .responding(Output.text())
     )
+
+    val intMapping = input.pureMapping[String, Int](
+      x => Right(x.toInt),
+      x => Try(x.toString).toEither.left.map(_.toString)
+    )
+
+    val MappedQueryParameter = add(
+      get("foo")
+        .expecting(Input.MappedInput(Input.AddQueryParameter("number"), intMapping))
+        .responding(Output.text())
+    )
   }
 
   it should "server this simple examples" in {
@@ -113,6 +122,10 @@ class AkkaTest extends TestBase {
           val collected = collectByteSource(data).utf8String
           Future.successful(text + "," + contentType + "," + collected)
       }
+
+      bind(Api1.MappedQueryParameter).to { x =>
+        Future.successful((x + 1).toString)
+      }
     }
     val server = new ApiServer(
       route
@@ -134,6 +147,9 @@ class AkkaTest extends TestBase {
       val headerParameter = prepare(Api1.HeaderParameter)
 
       val multipart = prepare(Api1.Multipart)
+
+      val mappedQueryParameter = prepare(Api1.MappedQueryParameter)
+
     }
 
     val response = await(client.helloWorldPrepared(HNil))
@@ -168,6 +184,9 @@ class AkkaTest extends TestBase {
     ))
 
     response9 shouldBe "foo,application/octet-stream,abccde"
+
+    val response10 = await(client.mappedQueryParameter(10))
+    response10 shouldBe "11"
   }
 
 }

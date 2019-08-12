@@ -8,7 +8,7 @@ import akka.util.ByteString
 import io.circe.Encoder
 import RequestEncoder.Fn
 import akka.http.scaladsl.model.HttpHeader.ParsingResult
-import net.reactivecore.fhttp.Input
+import net.reactivecore.fhttp.{ Input, TypedInput }
 import net.reactivecore.fhttp.akka.AkkaHttpHelper
 import net.reactivecore.fhttp.helper.SimpleArgumentLister
 import shapeless._
@@ -67,10 +67,12 @@ object RequestEncoder {
       request.copy(uri = uri)
   }
 
-  implicit def encodeMapped[T] = make[Input.Mapped[T], T] { step =>
+  implicit def encodeMapped[T] = make[Input.MappedPayload[T], T] { step =>
     val contentType = AkkaHttpHelper.forceContentType(step.mapping.contentType)
     (request, value) => {
-      val encoded = step.mapping.encode(value)
+      val encoded = step.mapping.encode(value).getOrElse {
+        throw new IllegalArgumentException("Could not encode value")
+      }
       request.withEntity(contentType, ByteString.fromByteBuffer(encoded))
     }
   }
@@ -82,7 +84,9 @@ object RequestEncoder {
   }
 
   implicit def encodeQueryParameterMap[T] = make[Input.QueryParameterMap[T], T] { step => (request, value) => {
-    val encoded = step.mapping.encode(value)
+    val encoded = step.mapping.encode(value).getOrElse {
+      throw new IllegalArgumentException("Could not encode value")
+    }
     val extended: Query = Query(request.uri.query() ++ encoded: _*)
     val uri = request.uri.withQuery(extended)
     request.copy(uri = uri)
@@ -108,6 +112,19 @@ object RequestEncoder {
       val parts = prepared(Nil, simpleArgumentLister.lift(values))
       val entity = Multipart.FormData(parts: _*).toEntity()
       request.withEntity(entity)
+    }
+  }
+
+  implicit def encodeMappedInput[A, B, T <: TypedInput[A], V](
+    implicit
+    aux: RequestEncoder.Aux[T, A]
+  ) = make[Input.MappedInput[A, B, T], B] { step =>
+    val prepared = aux.build(step.original)
+    (request, value) => {
+      val mapped = step.mapping.decode(value).getOrElse {
+        throw new IllegalArgumentException(s"Could not encode value")
+      }
+      prepared(request, mapped)
     }
   }
 

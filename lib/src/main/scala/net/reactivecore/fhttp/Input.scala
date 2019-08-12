@@ -18,15 +18,22 @@ object Input {
   /** Add an extra dynamic path. */
   case object ExtraPath extends TypedInput[String]
   /** Map payload to some value. */
-  case class Mapped[T](mapping: Mapping[T], maxLength: Option[Long] = None) extends TypedInput[T]
-  /** Expect a binary input stream (with content type). */
-  case object Binary extends TypedInput[(String, Array[Byte])]
+  case class MappedPayload[T](mapping: Mapping[T], maxLength: Option[Long] = None) extends TypedInput[T]
+
+  /**
+   * Expect a binary input stream (with content type).
+   * Resulting type should be something like content-type and binary data.
+   */
+  case object Binary extends Input
   /** Add a query parameter */
   case class AddQueryParameter(name: String) extends TypedInput[String]
   /** Parse query parameters into a circe-extended class, values are converted into strings before. */
   case class QueryParameterMap[T](mapping: PureMapping[Map[String, String], T]) extends TypedInput[T]
   /** Add an header with value. */
   case class AddHeader(name: String) extends TypedInput[String]
+
+  /** Maps a typed input to another type B. */
+  case class MappedInput[A, B, O <: TypedInput[A]](original: O, mapping: PureMapping[B, A]) extends TypedInput[B]
 
   /**
    * Multipart input
@@ -48,9 +55,15 @@ object Input {
     def make[A <: MultipartPart, B <: MultipartPart, C <: MultipartPart](a: A, b: B, c: C) = Multipart(a :: b :: c :: HNil)
   }
 
-  def text(limit: Option[Long] = None): Mapped[String] = Mapped(TextMapping, limit)
-  def circe[T](limit: Option[Long] = None)(implicit encoder: Encoder[T], decoder: Decoder[T]): Mapped[T] = Mapped(CirceJsonMapping[T], limit)
+  def text(limit: Option[Long] = None): MappedPayload[String] = MappedPayload(TextMapping, limit)
+  def circe[T](limit: Option[Long] = None)(implicit encoder: Encoder[T], decoder: Decoder[T]): MappedPayload[T] = MappedPayload(CirceJsonMapping[T], limit)
   def circeQuery[T](implicit encoder: ObjectEncoder[T], decoder: Decoder[T]) = QueryParameterMap(
     CirceJsonStringMapping()
   )
+
+  def pureMapping[A, B](mapping: A => Either[String, B], contraMap: B => Either[String, A]) = new PureMapping[B, A] {
+    override def encode(value: A): Either[String, B] = mapping(value)
+
+    override def decode(in: B): Either[String, A] = contraMap(in)
+  }
 }

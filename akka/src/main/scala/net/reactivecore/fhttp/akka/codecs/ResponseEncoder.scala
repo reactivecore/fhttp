@@ -43,10 +43,12 @@ object ResponseEncoder {
     }
   }
 
-  implicit def encodeMapped[T] = make[Output.Mapped[T], T] { step =>
+  implicit def encodeMapped[T] = make[Output.MappedPayload[T], T] { step =>
     val contentType = AkkaHttpHelper.forceContentType(step.mapping.contentType)
     (response, value) => {
-      val encoded = step.mapping.encode(value)
+      val encoded = step.mapping.encode(value).getOrElse {
+        throw new IllegalArgumentException("Could not encode value")
+      }
       response.withEntity(contentType, ByteString.fromByteBuffer(encoded))
     }
   }
