@@ -37,7 +37,8 @@ class ApiClient(httpExt: HttpExt, rootUri: Uri)(implicit ec: ExecutionContext, m
   ): Argument => HttpRequest = {
     val method = AkkaHttpHelper.methodForName(call.header.method)
 
-    val fullUri = rootUri.withPath(rootUri.path / call.header.path)
+    val fullPath = call.header.path.foldLeft(rootUri.path)(_ / _)
+    val fullUri = rootUri.withPath(fullPath)
 
     val base = HttpRequest(
       method,

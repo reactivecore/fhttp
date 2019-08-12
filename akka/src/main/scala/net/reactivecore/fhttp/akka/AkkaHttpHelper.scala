@@ -14,12 +14,11 @@ private[akka] object AkkaHttpHelper {
     }
   }
 
-  def forceParsePath(path: String, prefixSlash: Boolean = false): Path = {
-    val pure = Path(path)
-    if (prefixSlash && !pure.startsWithSlash) {
-      Path./(pure)
+  def forceParsePath(path: List[String]): Path = {
+    if (path.isEmpty) {
+      Path.SingleSlash
     } else {
-      pure
+      path.foldLeft(Path.Empty: Path)(_ / _)
     }
   }
 

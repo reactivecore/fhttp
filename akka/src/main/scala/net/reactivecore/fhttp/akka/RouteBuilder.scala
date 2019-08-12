@@ -31,7 +31,7 @@ trait RouteBuilder {
   ) {
     def to(f: Argument => Future[Result]): Route = {
       val requiredMethod = AkkaHttpHelper.methodForName(header.method)
-      val requiredPath = AkkaHttpHelper.forceParsePath(header.path, prefixSlash = true)
+      val requiredPath = AkkaHttpHelper.forceParsePath(header.path)
 
       requestContext => {
         if (requestContext.request.method == requiredMethod &&

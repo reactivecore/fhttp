@@ -6,21 +6,21 @@ import shapeless.ops.hlist.Tupler
 /** A Builder for APIs. */
 trait ApiBuilder {
 
-  protected def post(path: String): ApiCallBuilder[HNil, HNil] = {
+  protected def post(path: String*): ApiCallBuilder[HNil, HNil] = {
     empty(
-      ApiHeader("POST", path)
+      ApiHeader("POST", path.toList)
     )
   }
 
-  protected def get(path: String): ApiCallBuilder[HNil, HNil] = {
+  protected def get(path: String*): ApiCallBuilder[HNil, HNil] = {
     empty(
-      ApiHeader("GET", path)
+      ApiHeader("GET", path.toList)
     )
   }
 
-  protected def delete(path: String): ApiCallBuilder[HNil, HNil] = {
+  protected def delete(path: String*): ApiCallBuilder[HNil, HNil] = {
     empty(
-      ApiHeader("DELETE", path)
+      ApiHeader("DELETE", path.toList)
     )
   }
 

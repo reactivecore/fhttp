@@ -4,7 +4,7 @@ import shapeless.HList
 
 case class ApiHeader(
     method: String,
-    path: String
+    path: List[String]
 )
 
 /**
