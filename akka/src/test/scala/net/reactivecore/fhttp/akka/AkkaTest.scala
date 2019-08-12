@@ -3,7 +3,8 @@ package net.reactivecore.fhttp.akka
 import akka.stream.scaladsl.Sink
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
-import net.reactivecore.fhttp.{ ApiBuilder, Input, Output }
+import net.reactivecore.fhttp.akka.codecs.MultipartEncoder
+import net.reactivecore.fhttp.{ApiBuilder, Input, Output}
 
 import scala.concurrent.Future
 import shapeless._
@@ -57,6 +58,15 @@ class AkkaTest extends TestBase {
         .expecting(Input.AddHeader("header1"))
         .responding(Output.text())
     )
+
+    val Multipart = add (
+      post("multipart")
+        .expecting(Input.Multipart.make(
+          Input.Multipart.MultipartText("text1"),
+          Input.Multipart.MultipartFile("file1")
+        ))
+        .responding(Output.text())
+    )
   }
 
   it should "server this simple examples" in {
@@ -97,6 +107,13 @@ class AkkaTest extends TestBase {
       bind(Api1.HeaderParameter).to { input =>
         Future.successful(input)
       }
+
+      /*
+      bind(Api1.Multipart).to { input =>
+        ???
+      }
+
+       */
     }
     val server = new ApiServer(
       route
@@ -116,6 +133,8 @@ class AkkaTest extends TestBase {
       val queryPrepared = prepare(Api1.QueryParameters)
 
       val headerParameter = prepare(Api1.HeaderParameter)
+
+      val multipart = prepare(Api1.Multipart)
     }
 
     val response = await(client.helloWorldPrepared(HNil))
@@ -144,6 +163,12 @@ class AkkaTest extends TestBase {
 
     val response8 = await(client.headerParameter.apply("boom!"))
     response8 shouldBe "boom!"
+
+    val response9 = await(client.multipart.apply(
+      ("foo", "application/octet-stream" -> Source(List(ByteString("abc"))))
+    ))
+
+    response9 shouldBe "foo,application/octet-stream,abc"
   }
 
 }

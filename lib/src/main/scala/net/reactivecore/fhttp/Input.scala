@@ -1,6 +1,7 @@
 package net.reactivecore.fhttp
 
-import io.circe.{ Decoder, Encoder, ObjectEncoder }
+import io.circe.{Decoder, Encoder, ObjectEncoder}
+import shapeless._
 
 /**
  * Describes an Input Transformation
@@ -26,6 +27,26 @@ object Input {
   case class QueryParameterMap[T](mapping: PureMapping[Map[String, String], T]) extends TypedInput[T]
   /** Add an header with value. */
   case class AddHeader(name: String) extends TypedInput[String]
+
+  /**
+   * Multipart input
+   * (Constructed by [[Multipart.make]] functions )
+   * */
+  case class Multipart[Parts <: HList](parts: Parts) extends Input
+
+  trait MultipartPart
+
+  object Multipart {
+    /** A Multipart text field. */
+    case class MultipartText(name: String) extends MultipartPart
+    /** A Multipart file part. */
+    case class MultipartFile(name: String, fileName: Option[String] = None) extends MultipartPart
+
+    // Convenience constructors for Multiparts
+    def make[A <: MultipartPart](a: A) = Multipart(a :: HNil)
+    def make[A <: MultipartPart, B <: MultipartPart](a: A, b: B) = Multipart(a :: b :: HNil)
+    def make[A <: MultipartPart, B <: MultipartPart, C <: MultipartPart](a: A, b: B, c: C) = Multipart(a :: b :: c :: HNil)
+  }
 
   def text(limit: Option[Long] = None): Mapped[String] = Mapped(TextMapping, limit)
   def circe[T](limit: Option[Long] = None)(implicit encoder: Encoder[T], decoder: Decoder[T]): Mapped[T] = Mapped(CirceJsonMapping[T], limit)

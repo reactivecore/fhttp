@@ -47,4 +47,5 @@ TODO
 - Better path handling
 - More HTTP Methods instead of `GET`, `POST` and `DELETE`
 - Support for optional values
+- Reporting invalid calls instead of throwing an Exceptions
 - Extending

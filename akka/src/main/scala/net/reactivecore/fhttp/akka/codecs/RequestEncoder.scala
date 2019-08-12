@@ -2,7 +2,7 @@ package net.reactivecore.fhttp.akka.codecs
 
 import akka.http.javadsl.model.RequestEntity
 import akka.http.scaladsl.model.Uri.Query
-import akka.http.scaladsl.model.{ ContentTypes, HttpEntity, HttpHeader, HttpRequest }
+import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpHeader, HttpRequest, Multipart}
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import io.circe.Encoder
@@ -10,6 +10,7 @@ import RequestEncoder.Fn
 import akka.http.scaladsl.model.HttpHeader.ParsingResult
 import net.reactivecore.fhttp.Input
 import net.reactivecore.fhttp.akka.AkkaHttpHelper
+import net.reactivecore.fhttp.helper.SimpleArgumentLister
 import shapeless._
 
 trait RequestEncoder[Step] {
@@ -95,6 +96,18 @@ object RequestEncoder {
         throw new IllegalArgumentException(s"Invalid header ${e.errors}")
     }
     request.addHeader(encoded)
+  }
+
+  implicit def encodeMultipart[Parts <: HList, PartArgumentsH <: HList, PartArguments](
+    implicit aux: MultipartEncoder.Aux[Parts, PartArgumentsH],
+    simpleArgumentLister: SimpleArgumentLister.Aux[PartArgumentsH, PartArguments]
+  ) = make[Input.Multipart[Parts], PartArguments] { step =>
+    val prepared = aux.build(step.parts)
+    (request, values) => {
+      val parts = prepared(Nil, simpleArgumentLister.lift(values))
+      val entity = Multipart.FormData(parts: _*).toEntity()
+      request.withEntity(entity)
+    }
   }
 
   implicit val encodeNil = makeSimple[HNil, HNil] {
