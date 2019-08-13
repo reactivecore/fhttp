@@ -5,10 +5,10 @@ import java.nio.charset.StandardCharsets
 
 import io.circe.{ Decoder, Encoder, Json, ObjectEncoder }
 
-trait PureMapping[From, T] {
-  def encode(value: T): Either[String, From]
+trait PureMapping[From, To] {
+  def encode(value: To): Either[String, From]
 
-  def decode(in: From): Either[String, T]
+  def decode(in: From): Either[String, To]
 }
 
 /** Maps some [T] from and to plain bytes. */

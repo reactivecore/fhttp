@@ -138,7 +138,7 @@ object RequestDecoder {
     }
   }
 
-  implicit def encodeMapped[A, B, T <: TypedInput[A], V](
+  implicit def decodeMapped[A, B, T <: TypedInput[A], V](
     implicit
     aux: RequestDecoder.Aux[T, A]
   ) = make[Input.MappedInput[A, B, T], B] { step =>
@@ -147,7 +147,7 @@ object RequestDecoder {
       import requestContext._
       built(requestContext).map {
         case (context, value) =>
-          val encodedValue = step.mapping.encode(value).getOrElse {
+          val encodedValue = step.mapping.decode(value).getOrElse {
             throw new IllegalArgumentException("Could not encode value")
           }
           context -> encodedValue

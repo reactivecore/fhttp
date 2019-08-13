@@ -121,7 +121,7 @@ object RequestEncoder {
   ) = make[Input.MappedInput[A, B, T], B] { step =>
     val prepared = aux.build(step.original)
     (request, value) => {
-      val mapped = step.mapping.decode(value).getOrElse {
+      val mapped = step.mapping.encode(value).getOrElse {
         throw new IllegalArgumentException(s"Could not encode value")
       }
       prepared(request, mapped)

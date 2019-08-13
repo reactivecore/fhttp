@@ -33,7 +33,7 @@ object Input {
   case class AddHeader(name: String) extends TypedInput[String]
 
   /** Maps a typed input to another type B. */
-  case class MappedInput[A, B, O <: TypedInput[A]](original: O, mapping: PureMapping[B, A]) extends TypedInput[B]
+  case class MappedInput[From, To, Underlying <: TypedInput[From]](original: Underlying, mapping: PureMapping[From, To]) extends TypedInput[To]
 
   /**
    * Multipart input
@@ -61,9 +61,9 @@ object Input {
     CirceJsonStringMapping()
   )
 
-  def pureMapping[A, B](mapping: A => Either[String, B], contraMap: B => Either[String, A]) = new PureMapping[B, A] {
-    override def encode(value: A): Either[String, B] = mapping(value)
+  def pureMapping[A, B](mapping: A => Either[String, B], contraMap: B => Either[String, A]) = new PureMapping[A, B] {
+    override def encode(value: B): Either[String, A] = contraMap(value)
 
-    override def decode(in: B): Either[String, A] = contraMap(in)
+    override def decode(in: A): Either[String, B] = mapping(in)
   }
 }
