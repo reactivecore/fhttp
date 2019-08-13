@@ -1,5 +1,5 @@
 ThisBuild / organization := "net.reactivecore"
-ThisBuild / version := "0.1-SNAPSHOT"
+ThisBuild / version := "0.1.0"
 ThisBuild / scalaVersion := "2.12.8"
 // ThisBuild / scalacOptions += "-Xfatal-warnings" // this breaks the doc target due https://github.com/scala/bug/issues/10134
 ThisBuild / scalacOptions += "-feature"
@@ -12,6 +12,29 @@ val akkaHttpVersion = "10.1.7"
 val scalaTestVersion = "3.0.5"
 val circeVersion = "0.11.1"
 val shapelessVersion = "2.3.3"
+
+publishTo := sonatypePublishTo.value
+
+pomExtra := {
+  <url>https://github.com/reactivecore/fhttp</url>
+    <licenses>
+      <license>
+        <name>Apache License, Version 2.0</name>
+        <url>https://www.apache.org/licenses/LICENSE-2.0.html</url>
+      </license>
+    </licenses>
+    <scm>
+      <connection>scm:git:@github.com:reactivecore/fhttp.git</connection>
+      <url>git@github.com:reactivecore/fhttp.git</url>
+    </scm>
+    <developers>
+      <developer>
+        <id>nob13</id>
+        <name>Norbert Schultz</name>
+        <url>https://www.reactivecore.de</url>
+      </developer>
+    </developers>
+}
 
 import scalariform.formatter.preferences._
 val scalariformSettings = {
