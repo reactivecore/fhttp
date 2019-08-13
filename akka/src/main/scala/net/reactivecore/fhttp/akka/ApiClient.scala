@@ -1,16 +1,21 @@
 package net.reactivecore.fhttp.akka
 
 import akka.http.scaladsl.HttpExt
-import akka.http.scaladsl.model.{ HttpRequest, Uri }
+import akka.http.scaladsl.model.{ HttpRequest, HttpResponse, Uri }
 import akka.stream.Materializer
 import net.reactivecore.fhttp.ApiCall
+import net.reactivecore.fhttp.akka.ApiClient.RequestExecutor
 import net.reactivecore.fhttp.akka.codecs.{ DecodingContext, RequestEncoder, ResponseDecoder }
 import net.reactivecore.fhttp.helper.SimpleArgumentLister
 import shapeless._
 
 import scala.concurrent.{ ExecutionContext, Future }
 
-class ApiClient(httpExt: HttpExt, rootUri: Uri)(implicit ec: ExecutionContext, materializer: Materializer) {
+class ApiClient(requestExecutor: RequestExecutor, rootUri: Uri)(implicit ec: ExecutionContext, materializer: Materializer) {
+
+  def this(httpExt: HttpExt, rootUri: Uri)(implicit ec: ExecutionContext, materializer: Materializer) {
+    this(httpExt.singleRequest(_), rootUri)
+  }
 
   def prepare[In <: HList, Out <: HList, ArgumentH <: HList, Argument, ResultH <: HList, Result](call: ApiCall[In, Out])(
     implicit
@@ -24,7 +29,7 @@ class ApiClient(httpExt: HttpExt, rootUri: Uri)(implicit ec: ExecutionContext, m
     args => {
       val req = requestBuilder(args)
       val context = new DecodingContext()
-      val responseFuture = httpExt.singleRequest(req)
+      val responseFuture = requestExecutor(req)
       responseFuture.flatMap { response =>
         decoder(response, context)
       }
@@ -51,4 +56,8 @@ class ApiClient(httpExt: HttpExt, rootUri: Uri)(implicit ec: ExecutionContext, m
       mainEncoder(base, args)
     }
   }
+}
+
+object ApiClient {
+  type RequestExecutor = HttpRequest => Future[HttpResponse]
 }
