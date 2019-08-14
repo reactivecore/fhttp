@@ -9,7 +9,7 @@ import akka.util.ByteString
 import io.circe.Decoder
 import net.reactivecore.fhttp.{ Input, TypedInput }
 import net.reactivecore.fhttp.akka.{ AkkaHttpHelper, codecs }
-import net.reactivecore.fhttp.helper.SimpleArgumentLister
+import net.reactivecore.fhttp.helper.{ ConcatenateAndSplitHList, SimpleArgumentLister }
 import shapeless._
 
 import scala.concurrent.{ ExecutionContext, Future }
@@ -17,26 +17,9 @@ import scala.util.{ Failure, Success }
 
 /** Counterpart to RequestBuilder, decodes a Request */
 trait RequestDecoder[Step] {
-  type Output
+  type Output <: HList
 
   def build(s: Step): RequestDecoder.Fn[Output]
-
-  def map[X](x: Output => X) = new RequestDecoder[Step] {
-    type Output = X
-
-    override def build(s: Step): RequestDecoder.Fn[X] = {
-      val built = RequestDecoder.this.build(s)
-      context => {
-        import context._
-        built(context).map { value =>
-          value.right.map {
-            case (context2, out) =>
-              context2 -> x(out)
-          }
-        }
-      }
-    }
-  }
 }
 
 object RequestDecoder {
@@ -58,7 +41,8 @@ object RequestDecoder {
 
   def apply[T](implicit rd: RequestDecoder[T]): Aux[T, rd.Output] = rd
 
-  private def make[Step, Producing](f: Step => Fn[Producing]): Aux[Step, Producing] = new RequestDecoder[Step] {
+  /** Generate a new Request Decoder. */
+  def make[Step, Producing <: HList](f: Step => Fn[Producing]): Aux[Step, Producing] = new RequestDecoder[Step] {
     override type Output = Producing
 
     override def build(s: Step): Fn[Output] = {
@@ -66,27 +50,27 @@ object RequestDecoder {
     }
   }
 
-  implicit val stringPathDecoder = make[Input.ExtraPath.type, String] { _ => request =>
+  implicit val stringPathDecoder = make[Input.ExtraPath.type, String :: HNil] { _ => request =>
     val matcher = PathMatchers.Neutral / PathMatchers.Segment
     matcher(request.unmatchedPath) match {
       case Matched(rest, ok) =>
         val updated = request.withUnmatchedPath(rest)
         Future.successful(
-          Right(updated -> ok._1)
+          Right(updated -> (ok._1 :: HNil))
         )
       case Unmatched =>
         RequestDecoder.failedDecoding(DecodingError.InvalidPath("Expected sub path"))
     }
   }
 
-  implicit val fixedPathDecoder = make[Input.ExtraPathFixed, Unit] { step =>
+  implicit val fixedPathDecoder = make[Input.ExtraPathFixed, HNil] { step =>
     {
       val matcher = PathMatchers.Neutral / PathMatchers.Segments(step.pathElements.size)
       request =>
         matcher.apply(request.unmatchedPath) match {
           case Matched(rest, matches) if matches._1 == step.pathElements =>
             val updatedRequest = request.withUnmatchedPath(rest)
-            Future.successful(Right(updatedRequest -> (())))
+            Future.successful(Right(updatedRequest -> HNil))
           case Matched(_, _) =>
             RequestDecoder.failedDecoding(DecodingError.InvalidPath("Expected a different path"))
           case _ =>
@@ -95,64 +79,67 @@ object RequestDecoder {
     }
   }
 
-  implicit def mapped[T] = make[Input.MappedPayload[T], T] { step =>
+  implicit def mapped[T] = make[Input.MappedPayload[T], T :: HNil] { step =>
     implicit val unmarshaller = AkkaHttpHelper.unmarshallerFromMapping[T](step.mapping)
     requestContext => {
       import requestContext._
       Unmarshal(request.entity).to[T].map { decoded =>
-        Right(requestContext -> decoded)
+        Right(requestContext -> (decoded :: HNil))
       }
     }
   }
 
-  implicit val binaryStreamDecoder = make[Input.Binary.type, (String, Source[ByteString, _])] { step => requestContext => {
+  implicit val binaryStreamDecoder = make[Input.Binary.type, Source[ByteString, _] :: String :: HNil] { step => requestContext => {
     val entity = requestContext.request.entity
     val contentType = entity.contentType.value
     val dataSource = entity.dataBytes
     Future.successful(
-      Right(requestContext -> (contentType, dataSource))
+      Right(requestContext -> (dataSource :: contentType :: HNil))
     )
   }
   }
 
-  implicit val queryParameterDecoder = make[Input.AddQueryParameter, String] { step => requestContext => {
+  implicit val queryParameterDecoder = make[Input.AddQueryParameter, String :: HNil] { step => requestContext => {
     val v = requestContext.request.uri.query().get(step.name).getOrElse {
       throw new IllegalArgumentException("Missing query parameter")
     }
-    Future.successful(Right(requestContext -> v))
+    Future.successful(Right(requestContext -> (v :: HNil)))
   }
   }
 
-  implicit def queryParameterMapDecoder[T] = make[Input.QueryParameterMap[T], T] { step => requestContext => {
+  implicit def queryParameterMapDecoder[T] = make[Input.QueryParameterMap[T], T :: HNil] { step => requestContext => {
     val queryParameters = requestContext.request.uri.query().toMap
     step.mapping.decode(queryParameters) match {
       case Left(error) =>
         // TODO: Better handling
         throw new IllegalArgumentException(s"Could not parse request ${error}")
       case Right(ok) =>
-        Future.successful(Right(requestContext -> ok))
+        Future.successful(Right(requestContext -> (ok :: HNil)))
     }
   }
   }
 
-  implicit val headerValueDecoder = make[Input.AddHeader, String] { step => requestContext => {
-    val headerValue = requestContext.request.headers.collectFirst {
+  implicit val headerValueDecoder = make[Input.AddHeader, String :: HNil] { step => requestContext => {
+    val value = requestContext.request.headers.collectFirst {
       case h if h.name() == step.name => h.value()
-    }.getOrElse {
-      throw new IllegalArgumentException(s"Missing expected header ${step.name}")
     }
-    Future.successful(Right(requestContext -> headerValue))
+    value match {
+      case Some(existing) =>
+        Future.successful(Right(requestContext -> (existing :: HNil)))
+      case _ =>
+        RequestDecoder.failedDecoding(DecodingError.MissingExpectedValue(s"Missing expected header ${step.name}"))
+    }
+
   }
   }
 
   import scala.concurrent.duration._
   private val MultipartBufferingTimeout = 60.seconds // TODO: Make this changeable.
 
-  implicit def multipartDecoder[T <: HList, ProducingH <: HList, Producing](
+  implicit def multipartDecoder[T <: HList, ProducingH <: HList](
     implicit
-    multipartDecoder: MultipartDecoder.Aux[T, ProducingH],
-    argumentLister: SimpleArgumentLister.Aux[ProducingH, Producing]
-  ) = make[Input.Multipart[T], Producing] { step =>
+    multipartDecoder: MultipartDecoder.Aux[T, ProducingH]
+  ) = make[Input.Multipart[T], ProducingH] { step =>
     val built = multipartDecoder.build(step.parts)
     requestContext => {
       import requestContext._
@@ -165,7 +152,7 @@ object RequestDecoder {
       } yield {
         values match {
           case Left(bad) => Left(bad)
-          case Right(ok) => Right(requestContext -> argumentLister.unlift(ok))
+          case Right(ok) => Right(requestContext -> ok)
         }
       }
     }
@@ -173,18 +160,18 @@ object RequestDecoder {
 
   implicit def decodeMapped[A, B, T <: TypedInput[A], V](
     implicit
-    aux: RequestDecoder.Aux[T, A]
-  ) = make[Input.MappedInput[A, B, T], B] { step =>
+    aux: RequestDecoder.Aux[T, A :: HNil]
+  ) = make[Input.MappedInput[A, B, T], B :: HNil] { step =>
     val built = aux.build(step.original)
     requestContext => {
       import requestContext._
       built(requestContext).map {
         _.right.map {
           case (context, value) =>
-            val encodedValue = step.mapping.decode(value).getOrElse {
+            val encodedValue = step.mapping.decode(value.head).getOrElse {
               throw new IllegalArgumentException("Could not encode value")
             }
-            context -> encodedValue
+            context -> (encodedValue :: HNil)
         }
       }
     }
@@ -195,11 +182,12 @@ object RequestDecoder {
   }
   }
 
-  implicit def elemDecoder[H, T <: HList, X <: HList](
+  implicit def elemDecoder[H, T <: HList, HP <: HList, TP <: HList, R <: HList](
     implicit
-    h: RequestDecoder[H],
-    aux: RequestDecoder.Aux[T, X]
-  ) = make[H :: T, h.Output :: X] { step =>
+    h: RequestDecoder.Aux[H, HP],
+    aux: RequestDecoder.Aux[T, TP],
+    concatenateAndSplitHList: ConcatenateAndSplitHList.Aux[HP, TP, R]
+  ) = make[H :: T, R] { step =>
     val tailPrepared = aux.build(step.tail)
     val headPrepared = h.build(step.head)
     requestContext => {
@@ -211,7 +199,8 @@ object RequestDecoder {
           headPrepared(afterTailRequest).map {
             _.right.map {
               case (afterHeadRequest, afterHeadResult) =>
-                afterHeadRequest -> (afterHeadResult :: afterTailResult)
+                val finalValue = concatenateAndSplitHList.concatenate(afterHeadResult, afterTailResult)
+                afterHeadRequest -> finalValue
             }
           }
       }

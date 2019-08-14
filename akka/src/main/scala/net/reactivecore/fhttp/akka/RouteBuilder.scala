@@ -19,11 +19,24 @@ trait RouteBuilder {
     argumentLister: SimpleArgumentLister.Aux[ArgumentH, Argument],
     resultEncoder: ResponseEncoder.Aux[Out, ResultH],
     responseLister: SimpleArgumentLister.Aux[ResultH, Result]
-  ): Binder[Argument, Result] = Binder(
-    call.header,
-    requestDecoder.map(argumentLister.unlift).build(call.input),
-    resultEncoder.contraMap(responseLister.lift).build(call.output)
-  )
+  ): Binder[Argument, Result] = {
+    val appliedDecoder = requestDecoder.build(call.input)
+
+    val liftedInput: RequestDecoder.Fn[Argument] = { request =>
+      import request.executionContext
+      appliedDecoder(request).map {
+        _.right.map {
+          case (req, value) => req -> argumentLister.unlift(value)
+        }
+      }
+    }
+
+    Binder(
+      call.header,
+      liftedInput,
+      resultEncoder.contraMap(responseLister.lift).build(call.output)
+    )
+  }
 
   case class Binder[Argument, Result](
       header: ApiHeader,

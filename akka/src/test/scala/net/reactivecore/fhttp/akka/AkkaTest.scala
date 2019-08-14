@@ -139,7 +139,7 @@ class AkkaTest extends TestBase {
       }
 
       bind(Api1.DeepPath).to {
-        case (first, _, second) =>
+        case (first, second) =>
           Future.successful(s"${first},${second}")
       }
     }
