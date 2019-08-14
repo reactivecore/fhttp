@@ -13,28 +13,14 @@ val scalaTestVersion = "3.0.5"
 val circeVersion = "0.11.1"
 val shapelessVersion = "2.3.3"
 
+// Releasing settings
 ThisBuild / publishTo := sonatypePublishTo.value
-
-ThisBuild / pomExtra := {
-  <url>https://github.com/reactivecore/fhttp</url>
-    <licenses>
-      <license>
-        <name>Apache License, Version 2.0</name>
-        <url>https://www.apache.org/licenses/LICENSE-2.0.html</url>
-      </license>
-    </licenses>
-    <scm>
-      <connection>scm:git:@github.com:reactivecore/fhttp.git</connection>
-      <url>git@github.com:reactivecore/fhttp.git</url>
-    </scm>
-    <developers>
-      <developer>
-        <id>nob13</id>
-        <name>Norbert Schultz</name>
-        <url>https://www.reactivecore.de</url>
-      </developer>
-    </developers>
-}
+ThisBuild / publishMavenStyle := true
+ThisBuild / licenses := Seq("APL2" -> url("http://www.apache.org/licenses/LICENSE-2.0.txt"))
+ThisBuild / homepage := Some(url("https://github.com/reactivecore/fhttp"))
+ThisBuild / developers := List(
+  Developer(id="nob13", name="Norbert Schultz", email="norbert.schultz@reactivecore.de", url=url("https://www.reactivecore.de"))
+)
 
 import scalariform.formatter.preferences._
 val scalariformSettings = {
