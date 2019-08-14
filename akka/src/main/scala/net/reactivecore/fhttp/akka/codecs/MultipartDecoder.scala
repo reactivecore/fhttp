@@ -6,6 +6,7 @@ import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.stream.scaladsl.{ Sink, Source }
 import akka.util.ByteString
 import net.reactivecore.fhttp.Input.Multipart
+import net.reactivecore.fhttp.akka.codecs.RequestDecoder.DecodingError
 import shapeless._
 
 import scala.concurrent.Future
@@ -22,7 +23,7 @@ object MultipartDecoder {
     type Output = Output0
   }
 
-  type Fn[Output] = (RequestContext, FormData.Strict) => Future[Output]
+  type Fn[Output] = (RequestContext, FormData.Strict) => Future[Either[RequestDecoder.DecodingError, Output]]
 
   private def make[Step, Producing](f: Step => Fn[Producing]): Aux[Step, Producing] = new MultipartDecoder[Step] {
     override type Output = Producing
@@ -35,9 +36,10 @@ object MultipartDecoder {
   implicit val textDecoder = make[Multipart.MultipartText, String] { step => (req, formData) => {
     import req._
     formData.strictParts.find(_.name == step.name) match {
-      case None => throw new IllegalArgumentException(s"Missing field ${step.name}")
+      case None =>
+        RequestDecoder.failedDecoding(DecodingError.MissingExpectedValue(s"Missing multipart field ${step.name}"))
       case Some(field) =>
-        Unmarshal(field.entity).to[String]
+        RequestDecoder.decodeResultToResult(Unmarshal(field.entity).to[String])
     }
   }
   }
@@ -45,11 +47,12 @@ object MultipartDecoder {
   implicit val binaryDecoder = make[Multipart.MultipartFile, (String, Source[ByteString, _])] { step => (req, formData) => {
     import req._
     formData.strictParts.find(_.name == step.name) match {
-      case None => throw new IllegalArgumentException(s"Missing field ${step.name}")
+      case None =>
+        RequestDecoder.failedDecoding(DecodingError.MissingExpectedValue(s"Missing multipart field ${step.name}"))
       case Some(field) =>
         // Is this really streaming?
         val contentType = field.entity.contentType.value
-        Future.successful(contentType -> field.entity.dataBytes)
+        Future.successful(Right(contentType -> field.entity.dataBytes))
     }
   }
   }
@@ -63,13 +66,19 @@ object MultipartDecoder {
     val headPrepared = h.build(step.head)
     (req, strictForm) => {
       import req._
-      for {
-        tailValue <- tailPrepared.apply(req, strictForm)
-        headValue <- headPrepared.apply(req, strictForm)
-      } yield headValue :: tailValue
+      tailPrepared(req, strictForm).flatMap {
+        case Left(error) => Future.successful(Left(error))
+        case Right(tailValue) =>
+          headPrepared.apply(req, strictForm).map {
+            case Left(error) => Left(error)
+            case Right(headValue) => {
+              Right(headValue :: tailValue)
+            }
+          }
+      }
     }
   }
 
-  implicit val nilDecoder = make[HNil, HNil] { _ => (_, step) => Future.successful(HNil)
+  implicit val nilDecoder = make[HNil, HNil] { _ => (_, step) => Future.successful(Right(HNil))
   }
 }

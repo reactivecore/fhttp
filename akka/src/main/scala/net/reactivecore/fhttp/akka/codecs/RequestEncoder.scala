@@ -60,6 +60,12 @@ object RequestEncoder {
       request.withUri(request.uri.copy(path = path))
   }
 
+  implicit val encodeExtraPathFixed = makeSimple[Input.ExtraPathFixed, Unit] {
+    case (request, step, _) =>
+      val path = step.pathElements.foldLeft(request.uri.path)(_ / _)
+      request.withUri(request.uri.copy(path = path))
+  }
+
   implicit val addQueryParameter = makeSimple[Input.AddQueryParameter, String] {
     case (request, step, value) =>
       val extended: Query = Query(request.uri.query() :+ (step.name -> value): _*)

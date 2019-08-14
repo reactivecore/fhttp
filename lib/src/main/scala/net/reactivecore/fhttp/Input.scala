@@ -17,6 +17,9 @@ trait TypedInput[T] extends Input
 object Input {
   /** Add an extra dynamic path. */
   case object ExtraPath extends TypedInput[String]
+  /** Add an extra non-dynamic path (to be used after [[ExtraPath]]). */
+  case class ExtraPathFixed(pathElements: List[String]) extends Input
+
   /** Map payload to some value. */
   case class MappedPayload[T](mapping: Mapping[T], maxLength: Option[Long] = None) extends TypedInput[T]
 

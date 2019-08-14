@@ -66,6 +66,14 @@ class AkkaTest extends TestBase {
         .responding(Output.text())
     )
 
+    val DeepPath = add(
+      get("deep", "path")
+        .expecting(Input.ExtraPath)
+        .expecting(Input.ExtraPathFixed(List("foo", "bar")))
+        .expecting(Input.ExtraPath)
+        .responding(Output.text())
+    )
+
     val intMapping = input.pureMapping[String, Int](
       x => Right(x.toInt),
       x => Try(x.toString).toEither.left.map(_.toString)
@@ -128,6 +136,11 @@ class AkkaTest extends TestBase {
         case (x, y) =>
           Future.successful(y + (x + 1).toString)
       }
+
+      bind(Api1.DeepPath).to {
+        case (first, _, second) =>
+          Future.successful(s"${first},${second}")
+      }
     }
     val server = new ApiServer(
       route
@@ -151,6 +164,8 @@ class AkkaTest extends TestBase {
       val multipart = prepare(Api1.Multipart)
 
       val mappedQueryParameter = prepare(Api1.MappedQueryParameter)
+
+      val deepPath = prepare(Api1.DeepPath)
 
     }
 
@@ -189,6 +204,9 @@ class AkkaTest extends TestBase {
 
     val response10 = await(client.mappedQueryParameter((10, "Hello")))
     response10 shouldBe "Hello11"
+
+    val response11 = await(client.deepPath("1", (), "2"))
+    response11 shouldBe "1,2"
   }
 
 }

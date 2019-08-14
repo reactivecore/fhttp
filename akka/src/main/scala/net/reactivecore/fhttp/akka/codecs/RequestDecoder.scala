@@ -1,7 +1,8 @@
 package net.reactivecore.fhttp.akka.codecs
 
 import akka.http.scaladsl.common.StrictForm
-import akka.http.scaladsl.server.RequestContext
+import akka.http.scaladsl.server.PathMatcher.{ Matched, Unmatched }
+import akka.http.scaladsl.server.{ PathMatchers, RequestContext }
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
@@ -11,13 +12,13 @@ import net.reactivecore.fhttp.akka.{ AkkaHttpHelper, codecs }
 import net.reactivecore.fhttp.helper.SimpleArgumentLister
 import shapeless._
 
-import scala.concurrent.Future
+import scala.concurrent.{ ExecutionContext, Future }
+import scala.util.{ Failure, Success }
 
 /** Counterpart to RequestBuilder, decodes a Request */
 trait RequestDecoder[Step] {
   type Output
 
-  // TODO: Error Error result type
   def build(s: Step): RequestDecoder.Fn[Output]
 
   def map[X](x: Output => X) = new RequestDecoder[Step] {
@@ -27,9 +28,11 @@ trait RequestDecoder[Step] {
       val built = RequestDecoder.this.build(s)
       context => {
         import context._
-        built(context).map {
-          case (context2, out) =>
-            context2 -> x(out)
+        built(context).map { value =>
+          value.right.map {
+            case (context2, out) =>
+              context2 -> x(out)
+          }
         }
       }
     }
@@ -38,7 +41,16 @@ trait RequestDecoder[Step] {
 
 object RequestDecoder {
 
-  type Fn[Output] = RequestContext => Future[(RequestContext, Output)]
+  sealed trait DecodingError {
+    def msg: String
+  }
+  object DecodingError {
+    case class MissingExpectedValue(msg: String) extends DecodingError
+    case class InvalidPath(msg: String) extends DecodingError
+    case class InvalidPayload(msg: String) extends DecodingError
+  }
+
+  type Fn[Output] = RequestContext => Future[Either[DecodingError, (RequestContext, Output)]]
 
   type Aux[Step, OutputT] = RequestDecoder[Step] {
     type Output = OutputT
@@ -55,16 +67,32 @@ object RequestDecoder {
   }
 
   implicit val stringPathDecoder = make[Input.ExtraPath.type, String] { _ => request =>
-    val head = request.unmatchedPath
-    val withoutSlash = if (head.startsWithSlash) {
-      head.dropChars(1)
-    } else {
-      head
+    val matcher = PathMatchers.Neutral / PathMatchers.Segment
+    matcher(request.unmatchedPath) match {
+      case Matched(rest, ok) =>
+        val updated = request.withUnmatchedPath(rest)
+        Future.successful(
+          Right(updated -> ok._1)
+        )
+      case Unmatched =>
+        RequestDecoder.failedDecoding(DecodingError.InvalidPath("Expected sub path"))
     }
-    val updatedRequest = request.mapUnmatchedPath { _.dropChars(head.charCount) }
-    Future.successful(
-      updatedRequest -> withoutSlash.toString()
-    )
+  }
+
+  implicit val fixedPathDecoder = make[Input.ExtraPathFixed, Unit] { step =>
+    {
+      val matcher = PathMatchers.Neutral / PathMatchers.Segments(step.pathElements.size)
+      request =>
+        matcher.apply(request.unmatchedPath) match {
+          case Matched(rest, matches) if matches._1 == step.pathElements =>
+            val updatedRequest = request.withUnmatchedPath(rest)
+            Future.successful(Right(updatedRequest -> (())))
+          case Matched(_, _) =>
+            RequestDecoder.failedDecoding(DecodingError.InvalidPath("Expected a different path"))
+          case _ =>
+            RequestDecoder.failedDecoding(DecodingError.InvalidPath(s"Expected path ${step.pathElements}"))
+        }
+    }
   }
 
   implicit def mapped[T] = make[Input.MappedPayload[T], T] { step =>
@@ -72,7 +100,7 @@ object RequestDecoder {
     requestContext => {
       import requestContext._
       Unmarshal(request.entity).to[T].map { decoded =>
-        requestContext -> decoded
+        Right(requestContext -> decoded)
       }
     }
   }
@@ -82,7 +110,7 @@ object RequestDecoder {
     val contentType = entity.contentType.value
     val dataSource = entity.dataBytes
     Future.successful(
-      requestContext -> (contentType, dataSource)
+      Right(requestContext -> (contentType, dataSource))
     )
   }
   }
@@ -91,7 +119,7 @@ object RequestDecoder {
     val v = requestContext.request.uri.query().get(step.name).getOrElse {
       throw new IllegalArgumentException("Missing query parameter")
     }
-    Future.successful(requestContext -> v)
+    Future.successful(Right(requestContext -> v))
   }
   }
 
@@ -102,7 +130,7 @@ object RequestDecoder {
         // TODO: Better handling
         throw new IllegalArgumentException(s"Could not parse request ${error}")
       case Right(ok) =>
-        Future.successful(requestContext -> ok)
+        Future.successful(Right(requestContext -> ok))
     }
   }
   }
@@ -113,7 +141,7 @@ object RequestDecoder {
     }.getOrElse {
       throw new IllegalArgumentException(s"Missing expected header ${step.name}")
     }
-    Future.successful(requestContext -> headerValue)
+    Future.successful(Right(requestContext -> headerValue))
   }
   }
 
@@ -134,7 +162,12 @@ object RequestDecoder {
         // Otherwise it's tricky to decode the single form fields differently.
         strictForm <- fields.toStrict(MultipartBufferingTimeout)
         values <- built(requestContext, strictForm)
-      } yield requestContext -> argumentLister.unlift(values)
+      } yield {
+        values match {
+          case Left(bad) => Left(bad)
+          case Right(ok) => Right(requestContext -> argumentLister.unlift(ok))
+        }
+      }
     }
   }
 
@@ -146,17 +179,19 @@ object RequestDecoder {
     requestContext => {
       import requestContext._
       built(requestContext).map {
-        case (context, value) =>
-          val encodedValue = step.mapping.decode(value).getOrElse {
-            throw new IllegalArgumentException("Could not encode value")
-          }
-          context -> encodedValue
+        _.right.map {
+          case (context, value) =>
+            val encodedValue = step.mapping.decode(value).getOrElse {
+              throw new IllegalArgumentException("Could not encode value")
+            }
+            context -> encodedValue
+        }
       }
     }
   }
 
   implicit val nilDecoder = make[HNil, HNil] { _ => requestContext => {
-    Future.successful(requestContext -> HNil)
+    Future.successful(Right(requestContext -> HNil))
   }
   }
 
@@ -165,18 +200,35 @@ object RequestDecoder {
     h: RequestDecoder[H],
     aux: RequestDecoder.Aux[T, X]
   ) = make[H :: T, h.Output :: X] { step =>
-    // head first!
+    // head first (? really? )
     val headPrepared = h.build(step.head)
     val tailPrepared = aux.build(step.tail)
     requestContext => {
       import requestContext._
-      for {
-        (afterHeadRequest, afterHeadResult) <- headPrepared(requestContext)
-        (afterTailRequest, afterTailResult) <- tailPrepared(afterHeadRequest)
-      } yield {
-        afterTailRequest -> (afterHeadResult :: afterTailResult)
+
+      headPrepared(requestContext).flatMap {
+        case Left(bad) => Future.successful(Left(bad))
+        case Right((afterHeadRequest, afterHeadResult)) =>
+          tailPrepared(afterHeadRequest).map {
+            _.right.map {
+              case (afterTailRequest, afterTailResult) =>
+                afterTailRequest -> (afterHeadResult :: afterTailResult)
+            }
+          }
       }
     }
+  }
+
+  /** Convert the result of an unmarshalling operation into a future with extracted decoding error. */
+  private[codecs] def decodeResultToResult[T](in: Future[T])(implicit ec: ExecutionContext): Future[Either[DecodingError, T]] = {
+    in.transform {
+      case Failure(error) => Success(Left(DecodingError.InvalidPayload(error.getMessage)))
+      case Success(value) => Success(Right(value))
+    }
+  }
+
+  private[codecs] def failedDecoding(e: DecodingError): Future[Either[DecodingError, Nothing]] = {
+    Future.successful(Left(e))
   }
 
 }
