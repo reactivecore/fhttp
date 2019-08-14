@@ -200,19 +200,18 @@ object RequestDecoder {
     h: RequestDecoder[H],
     aux: RequestDecoder.Aux[T, X]
   ) = make[H :: T, h.Output :: X] { step =>
-    // head first (? really? )
-    val headPrepared = h.build(step.head)
     val tailPrepared = aux.build(step.tail)
+    val headPrepared = h.build(step.head)
     requestContext => {
       import requestContext._
 
-      headPrepared(requestContext).flatMap {
+      tailPrepared(requestContext).flatMap {
         case Left(bad) => Future.successful(Left(bad))
-        case Right((afterHeadRequest, afterHeadResult)) =>
-          tailPrepared(afterHeadRequest).map {
+        case Right((afterTailRequest, afterTailResult)) =>
+          headPrepared(afterTailRequest).map {
             _.right.map {
-              case (afterTailRequest, afterTailResult) =>
-                afterTailRequest -> (afterHeadResult :: afterTailResult)
+              case (afterHeadRequest, afterHeadResult) =>
+                afterHeadRequest -> (afterHeadResult :: afterTailResult)
             }
           }
       }
