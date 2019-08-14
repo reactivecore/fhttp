@@ -24,10 +24,11 @@ class ApiClient(requestExecutor: RequestExecutor, rootUri: Uri)(implicit ec: Exe
     responseDecoder: ResponseDecoder.Aux[Out, ResultH],
     resultLister: SimpleArgumentLister.Aux[ResultH, Result]
   ): Argument => Future[Result] = {
-    val requestBuilder = prepareHttpRequestBuilder(call)(encoder.contraMap(argumentLister.lift))
+    val requestBuilder = prepareHttpRequestBuilder(call)
     val decoder = responseDecoder.map(resultLister.unlift).build(call.output)
     args => {
-      val req = requestBuilder(args)
+      val argsLifted = argumentLister.lift(args)
+      val req = requestBuilder(argsLifted)
       val context = new DecodingContext()
       val responseFuture = requestExecutor(req)
       responseFuture.flatMap { response =>

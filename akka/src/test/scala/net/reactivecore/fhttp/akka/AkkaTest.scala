@@ -1,9 +1,9 @@
 package net.reactivecore.fhttp.akka
 
-import akka.http.scaladsl.model.{HttpRequest, HttpResponse}
-import akka.stream.scaladsl.{Sink, Source}
+import akka.http.scaladsl.model.{ HttpRequest, HttpResponse }
+import akka.stream.scaladsl.{ Sink, Source }
 import akka.util.ByteString
-import net.reactivecore.fhttp.{ApiBuilder, Input, Output}
+import net.reactivecore.fhttp.{ ApiBuilder, Input, Output }
 import shapeless._
 
 import scala.concurrent.Future
@@ -211,7 +211,7 @@ class AkkaTest extends TestBase {
     val response10 = await(client.mappedQueryParameter((10, "Hello")))
     response10 shouldBe "Hello11"
 
-    val response11 = await(client.deepPath("1", (), "2"))
+    val response11 = await(client.deepPath("1", "2"))
     response11 shouldBe "1,2"
   }
 
