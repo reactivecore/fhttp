@@ -47,7 +47,8 @@ TODO
 - Better path handling
 - More HTTP Methods instead of `GET`, `POST` and `DELETE`
 - Support for optional values
-- Reporting invalid calls instead of throwing an Exceptions
 - Extending
 - Multi part decoding on Akka Server side buffers the request in Memory.
+- Response Encoding/Decoding is using primitive values, while Request Encoding/Decoding is using HList values for flattening purposes.
+
 
