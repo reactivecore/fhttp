@@ -47,6 +47,9 @@ TODO
 - Better path handling
 - More HTTP Methods instead of `GET`, `POST` and `DELETE`
 - Support for optional values
+- Improved conversion routines (e.g. Boolean query parameters)
+- Built-in support for empty response with enabled error handling
+- Flattening Arguments in ApiClient (not Tuple1((Tuple2)))
 - Extending
 - Multi part decoding on Akka Server side buffers the request in Memory.
 - Response Encoding/Decoding is using primitive values, while Request Encoding/Decoding is using HList values for flattening purposes.
