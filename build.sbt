@@ -1,5 +1,5 @@
 ThisBuild / organization := "net.reactivecore"
-ThisBuild / version := "0.1.1-SNAPSHOT"
+ThisBuild / version := "0.1.2"
 ThisBuild / scalaVersion := "2.12.8"
 // ThisBuild / scalacOptions += "-Xfatal-warnings" // this breaks the doc target due https://github.com/scala/bug/issues/10134
 ThisBuild / scalacOptions += "-feature"
@@ -13,9 +13,9 @@ val scalaTestVersion = "3.0.5"
 val circeVersion = "0.11.1"
 val shapelessVersion = "2.3.3"
 
-publishTo := sonatypePublishTo.value
+ThisBuild / publishTo := sonatypePublishTo.value
 
-pomExtra := {
+ThisBuild / pomExtra := {
   <url>https://github.com/reactivecore/fhttp</url>
     <licenses>
       <license>
@@ -83,6 +83,7 @@ lazy val example = (project in file("example"))
     scalariformSettings,
     publish := {},
     publishLocal := {},
+    publishArtifact := false,
     paradiseSupport
   )
 
@@ -92,5 +93,6 @@ lazy val root = (project in file("."))
     name := "fhttp-root",
     publish := {},
     publishLocal := {},
+    publishArtifact := false,
     test := {}
   )
