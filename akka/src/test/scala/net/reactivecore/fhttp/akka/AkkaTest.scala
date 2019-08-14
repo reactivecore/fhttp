@@ -1,8 +1,9 @@
 package net.reactivecore.fhttp.akka
 
-import akka.stream.scaladsl.{ Sink, Source }
+import akka.http.scaladsl.model.{HttpRequest, HttpResponse}
+import akka.stream.scaladsl.{Sink, Source}
 import akka.util.ByteString
-import net.reactivecore.fhttp.{ ApiBuilder, Input, Output }
+import net.reactivecore.fhttp.{ApiBuilder, Input, Output}
 import shapeless._
 
 import scala.concurrent.Future
@@ -146,7 +147,12 @@ class AkkaTest extends TestBase {
       route
     )
 
-    val client = new ApiClient(http, "http://localhost:9000") {
+    val requestExecutor: HttpRequest => Future[HttpResponse] = { req =>
+      println(s"Executing ${req.method} ${req.uri}")
+      http.singleRequest(req)
+    }
+
+    val client = new ApiClient(requestExecutor, "http://localhost:9000") {
       val helloWorldPrepared = prepare(Api1.HelloWorld)
 
       val errorResponsePrepared = prepare(Api1.ErrorResponse)
