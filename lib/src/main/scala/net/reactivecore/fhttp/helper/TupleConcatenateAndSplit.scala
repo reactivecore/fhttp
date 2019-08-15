@@ -1,5 +1,6 @@
 package net.reactivecore.fhttp.helper
 
+import net.reactivecore.fhttp.helper.TupleConcatAndSplit.make
 import shapeless._
 import shapeless.ops.tuple.{Length, Prepend, Split}
 
@@ -12,20 +13,32 @@ trait TupleConcatAndSplit[L, R] {
   def split(result: Result): (L, R)
 }
 
-object TupleConcatAndSplit {
-  type Aux[L, R, Result0] = TupleConcatAndSplit[L, R] {
-    type Result = Result0
-  }
+trait TupleConcatenateAndSplitLowPriority {
+  implicit def prefixValue[L, R, Result](
+    implicit prepend: Prepend.Aux[Tuple1[L], R, Result],
+    splitter: Split.Aux[Result, Nat._1, (Tuple1[L], R)]
+  ) = make[L, R, Result](
+    (l, r) => prepend(Tuple1(l), r),
+    v => {
+      val (l, r) = splitter(v)
+      l._1 -> r
+    }
+  )
 
-  def apply[L, R](implicit t: TupleConcatAndSplit[L,R]): Aux[L, R, t.Result] = t
+  implicit def suffixValue[L, R, N <: Nat, Result](
+    implicit prepend: Prepend.Aux[L, Tuple1[R], Result],
+    length: Length.Aux[L, N],
+    splitter: Split.Aux[Result, N, (L, Tuple1[R])]
+  ) = make[L, R, Result](
+    (l, r) => prepend(l, Tuple1(r)),
+    v => {
+      val (l, r) = splitter(v)
+      l -> r._1
+    }
+  )
+}
 
-  def make[L, R, Result0](c: (L, R) => Result0, s: Result0 => (L, R)): Aux[L, R, Result0] = new TupleConcatAndSplit[L, R] {
-    override type Result = Result0
-
-    override def concat(left: L, right: R): Result0 = c(left, right)
-
-    override def split(result: Result0): (L, R) = s(result)
-  }
+trait TupleConcatenateAndSplitHighPriority extends TupleConcatenateAndSplitLowPriority {
 
   implicit val doubleUnit = make[Unit, Unit, Unit] (
     (_, _) => (),
@@ -42,17 +55,6 @@ object TupleConcatAndSplit {
     r => ((), r)
   )
 
-  implicit def prefixValue[L, R, Result](
-    implicit prepend: Prepend.Aux[Tuple1[L], R, Result],
-    splitter: Split.Aux[Result, Nat._1, (Tuple1[L], R)]
-  ) = make[L, R, Result](
-    (l, r) => prepend(Tuple1(l), r),
-    v => {
-      val (l, r) = splitter(v)
-      l._1 -> r
-    }
-  )
-
   implicit def generic[L: IsTuple, R : IsTuple, Result, N <: Nat](
     implicit prepend: Prepend.Aux[L, R, Result],
     length: Length.Aux[L, N],
@@ -64,4 +66,20 @@ object TupleConcatAndSplit {
       (l, r)
     }
   )
+}
+
+object TupleConcatAndSplit extends TupleConcatenateAndSplitHighPriority {
+  type Aux[L, R, Result0] = TupleConcatAndSplit[L, R] {
+    type Result = Result0
+  }
+
+  def apply[L, R](implicit t: TupleConcatAndSplit[L,R]): Aux[L, R, t.Result] = t
+
+  def make[L, R, Result0](c: (L, R) => Result0, s: Result0 => (L, R)): Aux[L, R, Result0] = new TupleConcatAndSplit[L, R] {
+    override type Result = Result0
+
+    override def concat(left: L, right: R): Result0 = c(left, right)
+
+    override def split(result: Result0): (L, R) = s(result)
+  }
 }

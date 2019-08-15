@@ -3,7 +3,7 @@ package net.reactivecore.fhttp.helper
 import net.reactivecore.fhttp.helper.TupleTree._
 
 class TupleTreeTest extends TestBase {
-/*
+
   def test[TT <: TupleTree, Tuple](
     tupleTree: TT,
     tuple: Tuple
@@ -57,7 +57,7 @@ class TupleTreeTest extends TestBase {
 
     test(tree.l, (100, "Hello World"))
     test(tree.r, value._3)
-  }
 
- */
+    test(tree, value)
+  }
 }

@@ -17,6 +17,6 @@ class TupleConcatAndSplitTest extends TestBase {
     test((), ("b"), ("b"))
     TupleConcatAndSplit.prefixValue[Int, (String, Int), (Int, String, Int)]
     test("a", ("b", 3), ("a", "b", 3))
-    // test(("a", "b"), 3, ("a", "b", 3))
+    test(("a", "b"), 3, ("a", "b", 3))
   }
 }
