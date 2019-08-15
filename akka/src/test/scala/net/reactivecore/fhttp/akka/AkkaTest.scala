@@ -28,6 +28,16 @@ class AkkaTest extends TestBase {
         )
     )
 
+    val EmptyError = add(
+      get("error2")
+        .responding(
+          Output.ErrorSuccess(
+            Output.text(),
+            Output.Empty
+          )
+        )
+    )
+
     val PathDependent = add(
       get("path")
         .expecting(Input.ExtraPath)
@@ -100,6 +110,12 @@ class AkkaTest extends TestBase {
         )
       }
 
+      bind(Api1.EmptyError).to { _ =>
+        Future.successful(
+          Right(())
+        )
+      }
+
       bind(Api1.PathDependent).to { x =>
         Future.successful(x)
       }
@@ -157,6 +173,8 @@ class AkkaTest extends TestBase {
 
       val errorResponsePrepared = prepare(Api1.ErrorResponse)
 
+      val emptyError = prepare(Api1.EmptyError)
+
       val pathDependent = prepare(Api1.PathDependent)
 
       val uploadClient = prepare(Api1.FileUpload)
@@ -180,6 +198,9 @@ class AkkaTest extends TestBase {
 
     val response2 = await(client.errorResponsePrepared(HNil))
     response2 shouldBe Left(401 -> "Forbidden")
+
+    val response2e = await(client.emptyError(()))
+    response2e shouldBe Right(())
 
     val response3 = await(client.pathDependent("file1"))
     response3 shouldBe "file1"

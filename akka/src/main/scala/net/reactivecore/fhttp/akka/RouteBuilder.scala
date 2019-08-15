@@ -1,7 +1,7 @@
 package net.reactivecore.fhttp.akka
 
 import akka.http.scaladsl.model.HttpResponse
-import akka.http.scaladsl.server.{ RequestContext, Route, RouteResult }
+import akka.http.scaladsl.server.{ MethodRejection, RequestContext, Route, RouteResult }
 import net.reactivecore.fhttp.akka.codecs.RequestDecoder.DecodingError
 import net.reactivecore.fhttp.{ ApiCall, ApiHeader }
 import net.reactivecore.fhttp.akka.codecs.{ RequestDecoder, ResponseEncoder }
@@ -49,15 +49,20 @@ trait RouteBuilder {
       val requiredPath = AkkaHttpHelper.forceParsePath(header.path)
 
       requestContext => {
-        if (requestContext.request.method == requiredMethod &&
-          requestContext.unmatchedPath.startsWith(requiredPath)) {
-
-          val updated = requestContext.mapUnmatchedPath { path =>
-            path.dropChars(requiredPath.charCount)
-          }
-          executeSelectedRequest(updated, f)
+        if (requestContext.request.method != requiredMethod) {
+          requestContext.reject(MethodRejection(requiredMethod))
         } else {
-          requestContext.reject()
+          if (requestContext.unmatchedPath.startsWith(requiredPath)) {
+            val pending = requestContext.unmatchedPath.dropChars(requiredPath.charCount)
+            if (pending.isEmpty || pending.startsWithSlash) {
+              val updated = requestContext.withUnmatchedPath(pending)
+              executeSelectedRequest(updated, f)
+            } else {
+              requestContext.reject()
+            }
+          } else {
+            requestContext.reject()
+          }
         }
       }
     }

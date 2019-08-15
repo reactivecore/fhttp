@@ -79,6 +79,8 @@ object ResponseEncoder {
     }
   }
 
+  implicit val encodeEmpty = make[Output.Empty.type, Unit] { _ => (response, _) => response }
+
   implicit val encodeNil = make[HNil, HNil] { _ => (response, _) => response
   }
 

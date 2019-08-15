@@ -99,6 +99,10 @@ object ResponseDecoder {
     }
   }
 
+  implicit val decodeEmpty = make[Output.Empty.type, Unit] { _ => (_, _) =>
+    Future.successful(())
+  }
+
   implicit val decodeNil = make[HNil, HNil] { _ => (_, _) => {
     Future.successful(HNil)
   }

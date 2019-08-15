@@ -20,6 +20,9 @@ object Output {
    */
   case object Binary extends Output
 
+  /** An empty response (useful for an empty case in ErrorSuccess). */
+  case object Empty extends Output
+
   /** Splits Error and success case into an either. The failure case should include the HTTP Status code. */
   case class ErrorSuccess[Failure <: Output, Success <: Output](f: Failure, s: Success) extends TypedOutput[Either[_, _]]
 
