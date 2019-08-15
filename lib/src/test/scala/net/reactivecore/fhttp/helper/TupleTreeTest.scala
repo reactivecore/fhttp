@@ -19,23 +19,16 @@ class TupleTreeTest extends TestBase {
     test(Branch(Leaf(3), Leaf("H")), (3, "H"))
     test(Branch(Empty, Leaf("H")), "H")
     test(Branch.fromLeafs(4, 5), (4, 5))
-    test(Branch(Branch.fromLeafs(1,2), Branch.fromLeafs(3,4)), (1,2,3,4))
-    test(Branch(Branch.fromLeafs(1,2), Leaf(3)), (1,2,3))
-    test(Branch(Leaf(0), Branch.fromLeafs(1,2)), (0,1,2))
+    test(Branch(Branch.fromLeafs(1, 2), Branch.fromLeafs(3, 4)), (1, 2, 3, 4))
+    test(Branch(Branch.fromLeafs(1, 2), Leaf(3)), (1, 2, 3))
+    test(Branch(Leaf(0), Branch.fromLeafs(1, 2)), (0, 1, 2))
   }
 
   it should "work with contra branches" in {
-    TupleConversion.contra1[
-      Leaf[Int],
-      Int,
-      Leaf[String],
-      String
-    ]
-    TupleConversion[
-      ContraBranch[Leaf[Int], Leaf[String]]
-    ]
+    TupleConversion.contra[Leaf[Int], Int, Leaf[String], String]
+    TupleConversion[ContraBranch[Leaf[Int], Leaf[String]]]
     test(
-      ContraBranch(Left(Leaf(1))) : ContraBranch[Leaf[Int], Leaf[String]], Left(1): Either[Int, String])
+      ContraBranch(Left(Leaf(1))): ContraBranch[Leaf[Int], Leaf[String]], Left(1): Either[Int, String])
   }
 
   it should "work with a complex example" in {
@@ -45,10 +38,10 @@ class TupleTreeTest extends TestBase {
         Leaf(100), Branch(Leaf("Hello World"), Empty)
       ),
       ContraBranch(
-        Left(Branch (
-          Leaf(500), Leaf("Something Crashed")
+        Left(Branch(
+          Leaf(500), Branch(Leaf("Something Crashed"), Empty)
         ))
-      ): ContraBranch[Branch[Leaf[Int], Leaf[String]], Leaf[String]]
+      ): ContraBranch[Branch[Leaf[Int], Branch[Leaf[String], Empty]], Leaf[String]]
     )
 
     val value = (100, "Hello World",

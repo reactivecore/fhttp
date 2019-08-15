@@ -2,7 +2,7 @@ package net.reactivecore.fhttp.helper
 
 import net.reactivecore.fhttp.helper.TupleConcatAndSplit.make
 import shapeless._
-import shapeless.ops.tuple.{Length, Prepend, Split}
+import shapeless.ops.tuple.{ Length, Prepend, Split }
 
 /** Simple Type class allowing concatenation and splitting of tuples. */
 trait TupleConcatAndSplit[L, R] {
@@ -14,8 +14,9 @@ trait TupleConcatAndSplit[L, R] {
 }
 
 trait TupleConcatenateAndSplitLowPriority {
-  implicit def prefixValue[L, R, Result](
-    implicit prepend: Prepend.Aux[Tuple1[L], R, Result],
+  implicit def prefixValue[L: IsNotTuple, R, Result](
+    implicit
+    prepend: Prepend.Aux[Tuple1[L], R, Result],
     splitter: Split.Aux[Result, Nat._1, (Tuple1[L], R)]
   ) = make[L, R, Result](
     (l, r) => prepend(Tuple1(l), r),
@@ -25,8 +26,9 @@ trait TupleConcatenateAndSplitLowPriority {
     }
   )
 
-  implicit def suffixValue[L, R, N <: Nat, Result](
-    implicit prepend: Prepend.Aux[L, Tuple1[R], Result],
+  implicit def suffixValue[L, R: IsNotTuple, N <: Nat, Result](
+    implicit
+    prepend: Prepend.Aux[L, Tuple1[R], Result],
     length: Length.Aux[L, N],
     splitter: Split.Aux[Result, N, (L, Tuple1[R])]
   ) = make[L, R, Result](
@@ -36,17 +38,22 @@ trait TupleConcatenateAndSplitLowPriority {
       l -> r._1
     }
   )
+
+  implicit def concatValue[L: IsNotTuple, R: IsNotTuple] = make[L, R, (L, R)](
+    (l, r) => (l, r),
+    v => v
+  )
 }
 
 trait TupleConcatenateAndSplitHighPriority extends TupleConcatenateAndSplitLowPriority {
 
-  implicit val doubleUnit = make[Unit, Unit, Unit] (
+  implicit val doubleUnit = make[Unit, Unit, Unit](
     (_, _) => (),
     _ => ((), ())
   )
 
   implicit def suffixUnit[L] = make[L, Unit, L](
-    (l,_) => l,
+    (l, _) => l,
     l => (l, ())
   )
 
@@ -55,8 +62,9 @@ trait TupleConcatenateAndSplitHighPriority extends TupleConcatenateAndSplitLowPr
     r => ((), r)
   )
 
-  implicit def generic[L: IsTuple, R : IsTuple, Result, N <: Nat](
-    implicit prepend: Prepend.Aux[L, R, Result],
+  implicit def generic[L: IsTuple, R: IsTuple, Result, N <: Nat](
+    implicit
+    prepend: Prepend.Aux[L, R, Result],
     length: Length.Aux[L, N],
     splitter: Split.Aux[Result, N, (L, R)]
   ) = make[L, R, Result](
@@ -73,7 +81,7 @@ object TupleConcatAndSplit extends TupleConcatenateAndSplitHighPriority {
     type Result = Result0
   }
 
-  def apply[L, R](implicit t: TupleConcatAndSplit[L,R]): Aux[L, R, t.Result] = t
+  def apply[L, R](implicit t: TupleConcatAndSplit[L, R]): Aux[L, R, t.Result] = t
 
   def make[L, R, Result0](c: (L, R) => Result0, s: Result0 => (L, R)): Aux[L, R, Result0] = new TupleConcatAndSplit[L, R] {
     override type Result = Result0

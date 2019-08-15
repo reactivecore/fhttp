@@ -12,7 +12,7 @@ object TupleTree {
   case class Leaf[T](x: T) extends TupleTree
 
   /** A left/right pair. */
-  case class Branch[L <: TupleTree,R <: TupleTree](l: L, r: R) extends TupleTree
+  case class Branch[L <: TupleTree, R <: TupleTree](l: L, r: R) extends TupleTree
 
   object Branch {
     def fromLeafs[LT, RT](left: LT, right: RT): Branch[Leaf[LT], Leaf[RT]] = Branch(Leaf(left), Leaf(right))
@@ -49,54 +49,28 @@ object TupleTree {
       override def fromTuple(tuple: R): TT = b(tuple)
     }
 
-    implicit val empty: Aux[Empty, Unit] = make[Empty, Unit] (
+    implicit val empty: Aux[Empty, Unit] = make[Empty, Unit](
       { _ => () },
       { _ => Empty }
     )
 
     // TODO: Why is this method necessary?
-    implicit val empty2: Aux[Empty.type , Unit] = make[Empty.type, Unit] (
+    implicit val empty2: Aux[Empty.type, Unit] = make[Empty.type, Unit](
       { _ => () },
       { _ => Empty }
     )
 
-    implicit def value[T] = make[Leaf[T], T] (
-       v => v.x,
-       v => Leaf(v)
-    )
-
-    implicit def pairWithValueRight[L <: TupleTree, LT, RV, Result](
-      implicit lc: TupleConversion.Aux[L, LT],
-      concatAndSplit: TupleConcatAndSplit.Aux[LT, Tuple1[RV], Result]
-    ) = make[Branch[L, Leaf[RV]], Result] (
-      v => concatAndSplit.concat(lc.toTuple(v.l), Tuple1(v.r.x)),
-      v => {
-        val (l, r) = concatAndSplit.split(v)
-        Branch(lc.fromTuple(l), Leaf(r._1))
-      }
-    )
-
-    implicit def pairWithValueLeft[LV, R <: TupleTree, RT, Result](
-      implicit rc: TupleConversion.Aux[R, RT],
-      concatAndSplit: TupleConcatAndSplit.Aux[Tuple1[LV], RT, Result]
-    ) = make[Branch[Leaf[LV], R], Result] (
-      v => concatAndSplit.concat(Tuple1(v.l.x), rc.toTuple(v.r)),
-      v => {
-        val (l, r) = concatAndSplit.split(v)
-        Branch(Leaf(l._1), rc.fromTuple(r))
-      }
-    )
-
-    implicit def valuePair[LV, RV] = make[Branch[Leaf[LV], Leaf[RV]], (LV, RV)] (
-      v => (v.l.x, v.r.x),
-      v => Branch(Leaf(v._1), Leaf(v._2))
+    implicit def leaf[T] = make[Leaf[T], T](
+      v => v.x,
+      v => Leaf(v)
     )
 
     implicit def pair[L <: TupleTree, LR, R <: TupleTree, RR, Result](
-      implicit lc: TupleConversion.Aux[L, LR],
+      implicit
+      lc: TupleConversion.Aux[L, LR],
       rc: TupleConversion.Aux[R, RR],
       concatAndSplit: TupleConcatAndSplit.Aux[LR, RR, Result]
-    ) = make[Branch[L, R], Result] (
+    ) = make[Branch[L, R], Result](
       v => concatAndSplit.concat(lc.toTuple(v.l), rc.toTuple(v.r)),
       v => {
         val (l, r) = concatAndSplit.split(v)
@@ -104,20 +78,21 @@ object TupleTree {
       }
     )
 
-    implicit def contra1[L <: TupleTree, LR, R <: TupleTree, RR](
-      implicit lc: TupleConversion.Aux[L, LR],
+    implicit def contra[L <: TupleTree, LR, R <: TupleTree, RR](
+      implicit
+      lc: TupleConversion.Aux[L, LR],
       rc: TupleConversion.Aux[R, RR]
-    ) = make[ContraBranch[L, R], Either[LR, RR]] (
+    ) = make[ContraBranch[L, R], Either[LR, RR]](
       v => {
         v.v match {
-          case Left(left) => Left(lc.toTuple(left))
+          case Left(left)   => Left(lc.toTuple(left))
           case Right(right) => Right(rc.toTuple(right))
         }
       },
       {
-      case Left(left) =>
-        ContraBranch(Left(lc.fromTuple(left)))
-      case Right(right) =>
+        case Left(left) =>
+          ContraBranch(Left(lc.fromTuple(left)))
+        case Right(right) =>
           ContraBranch(Right(rc.fromTuple(right)))
       }
     )
