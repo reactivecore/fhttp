@@ -1,9 +1,8 @@
 package net.reactivecore.fhttp.helper
 
-import org.scalatest.{ FlatSpec, FunSuite, Matchers }
 import shapeless._
 
-class SimpleArgumentListerTest extends FlatSpec with Matchers {
+class SimpleArgumentListerTest extends TestBase {
 
   def makeLifter[H <: HList, T, R](f: H => R)(implicit aux: SimpleArgumentLister.Aux[H, T]): T => R = {
     i => f(aux.lift(i))
