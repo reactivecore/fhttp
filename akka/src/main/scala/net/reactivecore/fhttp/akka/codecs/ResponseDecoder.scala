@@ -2,6 +2,7 @@ package net.reactivecore.fhttp.akka.codecs
 
 import akka.http.scaladsl.model.HttpResponse
 import akka.http.scaladsl.unmarshalling.Unmarshal
+import akka.http.scaladsl.util.FastFuture
 import akka.stream.Materializer
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
@@ -12,6 +13,7 @@ import net.reactivecore.fhttp.helper.VTree
 import shapeless._
 
 import scala.concurrent.{ ExecutionContext, Future }
+import akka.http.scaladsl.util.FastFuture._
 
 class DecodingContext(
     implicit
@@ -81,7 +83,7 @@ object ResponseDecoder {
   implicit val decodeBinary = make[Output.Binary.type, VTree.Branch[VTree.Leaf[String], VTree.Leaf[Source[ByteString, _]]]] { step => (response, _) => {
     val contentType = response.entity.contentType.value
     val source = response.entity.dataBytes
-    Future.successful(
+    FastFuture.successful(
       VTree.Branch.fromLeafs(contentType, source)
     )
   }
@@ -116,11 +118,11 @@ object ResponseDecoder {
   }
 
   implicit val decodeEmpty = make[Output.Empty.type, VTree.Empty] { _ => (_, _) =>
-    Future.successful(VTree.Empty)
+    FastFuture.successful(VTree.Empty)
   }
 
   implicit val decodeNil = make[HNil, VTree.Empty] { _ => (_, _) => {
-    Future.successful(VTree.Empty)
+    FastFuture.successful(VTree.Empty)
   }
   }
 
@@ -136,8 +138,8 @@ object ResponseDecoder {
       val decodeHeadFuture = decodeHead(response, context)
       import context._
       for {
-        decodedTail <- decodeTailFuture
-        decodedHead <- decodeHeadFuture
+        decodedTail <- decodeTailFuture.fast
+        decodedHead <- decodeHeadFuture.fast
       } yield {
         VTree.Branch(decodedHead, decodedTail)
       }

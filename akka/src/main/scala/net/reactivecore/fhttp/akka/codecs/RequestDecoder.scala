@@ -3,6 +3,7 @@ package net.reactivecore.fhttp.akka.codecs
 import akka.http.scaladsl.server.PathMatcher.{ Matched, Unmatched }
 import akka.http.scaladsl.server.{ PathMatchers, RequestContext }
 import akka.http.scaladsl.unmarshalling.Unmarshal
+import akka.http.scaladsl.util.FastFuture
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import net.reactivecore.fhttp.akka.AkkaHttpHelper
@@ -12,6 +13,7 @@ import shapeless._
 
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.util.{ Failure, Success }
+import akka.http.scaladsl.util.FastFuture._
 
 /** Counterpart to RequestBuilder, decodes a Request */
 trait RequestDecoder[Step] {
@@ -67,7 +69,7 @@ object RequestDecoder {
     matcher(request.unmatchedPath) match {
       case Matched(rest, ok) =>
         val updated = request.withUnmatchedPath(rest)
-        Future.successful(
+        FastFuture.successful(
           Right(updated -> (VTree.Leaf(ok._1)))
         )
       case Unmatched =>
@@ -82,7 +84,7 @@ object RequestDecoder {
         matcher.apply(request.unmatchedPath) match {
           case Matched(rest, matches) if matches._1 == step.pathElements =>
             val updatedRequest = request.withUnmatchedPath(rest)
-            Future.successful(Right(updatedRequest -> VTree.Empty))
+            FastFuture.successful(Right(updatedRequest -> VTree.Empty))
           case Matched(_, _) =>
             RequestDecoder.failedDecoding(DecodingError.InvalidPath("Expected a different path"))
           case _ =>
@@ -105,7 +107,7 @@ object RequestDecoder {
     val entity = requestContext.request.entity
     val contentType = entity.contentType.value
     val dataSource = entity.dataBytes
-    Future.successful(
+    FastFuture.successful(
       Right(requestContext -> VTree.Branch.fromLeafs(contentType, dataSource))
     )
   }
@@ -116,7 +118,7 @@ object RequestDecoder {
       case None =>
         failedDecoding(DecodingError.MissingExpectedValue(s"Missing Query parameter ${step.name}"))
       case Some(ok) =>
-        Future.successful(Right(requestContext -> (VTree.Leaf(ok))))
+        FastFuture.successful(Right(requestContext -> (VTree.Leaf(ok))))
     }
   }
   }
@@ -127,7 +129,7 @@ object RequestDecoder {
       case Left(error) =>
         RequestDecoder.failedDecoding(DecodingError.InvalidQuery(s"Could not parse query map (${error})"))
       case Right(ok) =>
-        Future.successful(Right(requestContext -> (VTree.Leaf(ok))))
+        FastFuture.successful(Right(requestContext -> (VTree.Leaf(ok))))
     }
   }
   }
@@ -138,7 +140,7 @@ object RequestDecoder {
     }
     value match {
       case Some(existing) =>
-        Future.successful(Right(requestContext -> (VTree.Leaf(existing))))
+        FastFuture.successful(Right(requestContext -> (VTree.Leaf(existing))))
       case _ =>
         RequestDecoder.failedDecoding(DecodingError.MissingExpectedValue(s"Missing expected header ${step.name}"))
     }
@@ -191,7 +193,7 @@ object RequestDecoder {
   }
 
   implicit val nilDecoder = make[HNil, VTree.Empty] { _ => requestContext => {
-    Future.successful(Right(requestContext -> VTree.Empty))
+    FastFuture.successful(Right(requestContext -> VTree.Empty))
   }
   }
 
@@ -205,8 +207,8 @@ object RequestDecoder {
     requestContext => {
       import requestContext._
 
-      headPrepared(requestContext).flatMap {
-        case Left(bad) => Future.successful(Left(bad))
+      headPrepared(requestContext).fast.flatMap {
+        case Left(bad) => FastFuture.successful(Left(bad))
         case Right((afterHeadRequest, afterHeadResult1)) =>
           tailPrepared(afterHeadRequest).map {
             _.right.map {
@@ -228,7 +230,7 @@ object RequestDecoder {
   }
 
   private[codecs] def failedDecoding(e: DecodingError): Future[Either[DecodingError, Nothing]] = {
-    Future.successful(Left(e))
+    FastFuture.successful(Left(e))
   }
 
 }

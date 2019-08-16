@@ -164,7 +164,7 @@ class AkkaTest extends TestBase {
     )
 
     val requestExecutor: HttpRequest => Future[HttpResponse] = { req =>
-      println(s"Executing ${req.method} ${req.uri}")
+      // println(s"Executing ${req.method} ${req.uri}")
       http.singleRequest(req)
     }
 
@@ -234,5 +234,17 @@ class AkkaTest extends TestBase {
 
     val response11 = await(client.deepPath("1", "2"))
     response11 shouldBe "1,2"
+
+    withClue("It should not be too slow") {
+      val count = 1000
+      val t0 = System.currentTimeMillis()
+      for (i <- 0 until count) {
+        await(client.multipart.apply(
+          ("foo", "application/octet-stream", Source(List(ByteString("abc"), ByteString("cde"))))
+        ))
+      }
+      val t1 = System.currentTimeMillis()
+      println(s"Executed ${count} in ${t1 - t0}ms, ${(t1 - t0) / count.toFloat}ms/req")
+    }
   }
 }
