@@ -2,10 +2,10 @@ package net.reactivecore.fhttp
 
 import shapeless._
 
-case class ApiCallBuilder[In <: HList, Out <: HList](
+case class ApiCallBuilder[InReverse <: HList, OutReverse <: HList](
     header: ApiHeader,
-    reverseInput: In,
-    reverseOutput: Out
+    reverseInput: InReverse,
+    reverseOutput: OutReverse
 ) {
 
   def expecting[T <: Input](
