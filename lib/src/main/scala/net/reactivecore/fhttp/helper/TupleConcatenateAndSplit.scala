@@ -2,7 +2,7 @@ package net.reactivecore.fhttp.helper
 
 import net.reactivecore.fhttp.helper.TupleConcatAndSplit.make
 import shapeless._
-import shapeless.ops.tuple.{ Length, Prepend, Split }
+import shapeless.ops.tuple.{ Init, Last, Length, Prepend, Split }
 
 /** Simple Type class allowing concatenation and splitting of tuples. */
 trait TupleConcatAndSplit[L, R] {
@@ -26,16 +26,17 @@ trait TupleConcatenateAndSplitLowPriority {
     }
   )
 
-  implicit def suffixValue[L, R: IsNotTuple, N <: Nat, Result](
+  implicit def suffixValue[L, R: IsNotTuple, Result](
     implicit
     prepend: Prepend.Aux[L, Tuple1[R], Result],
-    length: Length.Aux[L, N],
-    splitter: Split.Aux[Result, N, (L, Tuple1[R])]
+    last: Last.Aux[Result, R],
+    init: Init.Aux[Result, L]
   ) = make[L, R, Result](
     (l, r) => prepend(l, Tuple1(r)),
     v => {
-      val (l, r) = splitter(v)
-      l -> r._1
+      val l = init(v)
+      val r = last(v)
+      l -> r
     }
   )
 
