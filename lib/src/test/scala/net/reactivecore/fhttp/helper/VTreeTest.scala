@@ -39,6 +39,11 @@ class VTreeTest extends TestBase {
     testBoth(Empty: Empty, HNil: HNil, ()) // TODO: Why the empty deduction?
     testBoth(Leaf(5), 5 :: HNil, 5)
     testBoth(Branch(Leaf(3), Leaf("H")), 3 :: "H" :: HNil, (3, "H"))
+    TupleConversion.pair[Leaf[Int], Int, Leaf[Int], Int, (Int, Int)]
+    testTupleConversion(
+      Branch.fromLeafs("a", 2),
+      ("a", 2)
+    )
     testBoth(
       Branch(Empty, Leaf("H")),
       "H" :: HNil,
