@@ -1,32 +1,35 @@
 package net.reactivecore.fhttp.helper
 
 /**
- * A tree which can contain either tuples, eithers or values.
+ * A tree which can contain either tuples ([[VTree.Branch]]), Eithers ([[VTree.ContraBranch]]) or values ([[VTree.Leaf]]).
+ *
+ * For constructability it can also contain empty values ([[VTree.Empty]])
+ *
  * Used for composition of argument lists.
  */
-sealed trait TupleTree
+sealed trait VTree
 
-object TupleTree {
+object VTree {
 
   /** Single value. x should not be a TupleTree by itself. */
-  case class Leaf[T](x: T) extends TupleTree
+  case class Leaf[T](x: T) extends VTree
 
   /** A left/right pair. */
-  case class Branch[L <: TupleTree, R <: TupleTree](l: L, r: R) extends TupleTree
+  case class Branch[L <: VTree, R <: VTree](l: L, r: R) extends VTree
 
   object Branch {
     def fromLeafs[LT, RT](left: LT, right: RT): Branch[Leaf[LT], Leaf[RT]] = Branch(Leaf(left), Leaf(right))
   }
 
   /** Either a left or a right value. */
-  case class ContraBranch[L <: TupleTree, R <: TupleTree](v: Either[L, R]) extends TupleTree
+  case class ContraBranch[L <: VTree, R <: VTree](v: Either[L, R]) extends VTree
 
   /** The empty tuple Tree. */
-  sealed trait Empty extends TupleTree
+  sealed trait Empty extends VTree
   case object Empty extends Empty
 
   /** Converts tuple trees to values. */
-  trait TupleConversion[T <: TupleTree] {
+  trait TupleConversion[T <: VTree] {
     type Result
 
     def toTuple(value: T): Result
@@ -35,13 +38,13 @@ object TupleTree {
   }
 
   object TupleConversion {
-    type Aux[TT <: TupleTree, Result0] = TupleConversion[TT] {
+    type Aux[TT <: VTree, Result0] = TupleConversion[TT] {
       type Result = Result0
     }
 
-    def apply[TT <: TupleTree](implicit tc: TupleConversion[TT]): Aux[TT, tc.Result] = tc
+    def apply[TT <: VTree](implicit tc: TupleConversion[TT]): Aux[TT, tc.Result] = tc
 
-    private def make[TT <: TupleTree, R](f: TT => R, b: R => TT): Aux[TT, R] = new TupleConversion[TT] {
+    private def make[TT <: VTree, R](f: TT => R, b: R => TT): Aux[TT, R] = new TupleConversion[TT] {
       override type Result = R
 
       override def toTuple(value: TT): R = f(value)
@@ -65,7 +68,7 @@ object TupleTree {
       v => Leaf(v)
     )
 
-    implicit def pair[L <: TupleTree, LR, R <: TupleTree, RR, Result](
+    implicit def pair[L <: VTree, LR, R <: VTree, RR, Result](
       implicit
       lc: TupleConversion.Aux[L, LR],
       rc: TupleConversion.Aux[R, RR],
@@ -78,7 +81,7 @@ object TupleTree {
       }
     )
 
-    implicit def contra[L <: TupleTree, LR, R <: TupleTree, RR](
+    implicit def contra[L <: VTree, LR, R <: VTree, RR](
       implicit
       lc: TupleConversion.Aux[L, LR],
       rc: TupleConversion.Aux[R, RR]

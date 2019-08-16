@@ -1,10 +1,10 @@
 package net.reactivecore.fhttp.helper
 
-import net.reactivecore.fhttp.helper.TupleTree._
+import net.reactivecore.fhttp.helper.VTree._
 
-class TupleTreeTest extends TestBase {
+class VTreeTest extends TestBase {
 
-  def test[TT <: TupleTree, Tuple](
+  def test[TT <: VTree, Tuple](
     tupleTree: TT,
     tuple: Tuple
   )(implicit tupleConversion: TupleConversion.Aux[TT, Tuple], again: TupleConversion[TT]): Unit = {
@@ -13,7 +13,7 @@ class TupleTreeTest extends TestBase {
   }
 
   it should "work with simple trees" in {
-    TupleConversion[TupleTree.Empty]
+    TupleConversion[VTree.Empty]
     test(Empty: Empty, ()) // TODO: Why the empty deduction?
     test(Leaf(5), 5)
     test(Branch(Leaf(3), Leaf("H")), (3, "H"))
