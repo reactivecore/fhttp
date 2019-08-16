@@ -26,7 +26,8 @@ class VTreeTest extends TestBase {
     hList: H,
     tuple: T
   )(
-    implicit tupleConversion: TupleConversion.Aux[V, T],
+    implicit
+    tupleConversion: TupleConversion.Aux[V, T],
     hListConversion: HListConversion.Aux[V, H]
   ): Unit = {
     testTupleConversion(vTree, tuple)
@@ -38,31 +39,37 @@ class VTreeTest extends TestBase {
     testBoth(Empty: Empty, HNil: HNil, ()) // TODO: Why the empty deduction?
     testBoth(Leaf(5), 5 :: HNil, 5)
     testBoth(Branch(Leaf(3), Leaf("H")), 3 :: "H" :: HNil, (3, "H"))
-    testBoth(Branch(Empty, Leaf("H")),
+    testBoth(
+      Branch(Empty, Leaf("H")),
       "H" :: HNil,
       "H"
     )
-    testBoth(Branch.fromLeafs(4, 5),
+    testBoth(
+      Branch.fromLeafs(4, 5),
       4 :: 5 :: HNil,
       (4, 5))
-    testBoth(Branch(Branch.fromLeafs(1, 2), Branch.fromLeafs(3, 4)),
+    testBoth(
+      Branch(Branch.fromLeafs(1, 2), Branch.fromLeafs(3, 4)),
       1 :: 2 :: 3 :: 4 :: HNil,
       (1, 2, 3, 4))
-    testBoth(Branch(Branch.fromLeafs(1, 2), Leaf(3)),
+    testBoth(
+      Branch(Branch.fromLeafs(1, 2), Leaf(3)),
       1 :: 2 :: 3 :: HNil,
       (1, 2, 3))
-    testBoth(Branch(Leaf(0), Branch.fromLeafs(1, 2)),
+    testBoth(
+      Branch(Leaf(0), Branch.fromLeafs(1, 2)),
       0 :: 1 :: 2 :: HNil,
       (0, 1, 2))
   }
 
   it should "work with contra branches" in {
-    TupleConversion.contra[Leaf[Int], Int, Leaf[String], String]
+    // TupleConversion.contra[Leaf[Int], Int, Leaf[String], String]
     TupleConversion[ContraBranch[Leaf[Int], Leaf[String]]]
     testBoth(
       ContraBranch(Left(Leaf(1))): ContraBranch[Leaf[Int], Leaf[String]],
-      (Left(1 :: HNil) :: HNil) : Either[Int :: HNil, String :: HNil] :: HNil,
-      Left(1): Either[Int, String])
+      (Left(1 :: HNil) :: HNil): Either[Int :: HNil, String :: HNil] :: HNil,
+      Left(1): Either[Int, String]
+    )
   }
 
   it should "work with a complex example" in {

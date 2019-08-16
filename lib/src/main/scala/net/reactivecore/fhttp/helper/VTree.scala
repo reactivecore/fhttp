@@ -1,6 +1,7 @@
 package net.reactivecore.fhttp.helper
 
 import shapeless._
+import shapeless.ops.hlist.Tupler
 
 /**
  * A tree which can contain either tuples ([[VTree.Branch]]), Eithers ([[VTree.ContraBranch]]) or values ([[VTree.Leaf]]).
@@ -126,6 +127,9 @@ object VTree {
 
       override def fromTuple(tuple: R): TT = b(tuple)
     }
+
+    // TODO: It would be great if tuple conversion is based upon HListConversion (as it internally converts quite a lot)
+    // However this is tricky because of embedded either types.
 
     implicit val empty: Aux[Empty, Unit] = make[Empty, Unit](
       { _ => () },
