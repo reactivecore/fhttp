@@ -21,6 +21,8 @@ object VTree {
     def fromLeafs[LT, RT](left: LT, right: RT): Branch[Leaf[LT], Leaf[RT]] = Branch(Leaf(left), Leaf(right))
   }
 
+  type LeafBranch[LT, RT] = Branch[Leaf[LT], Leaf[RT]]
+
   /** Either a left or a right value. */
   case class ContraBranch[L <: VTree, R <: VTree](v: Either[L, R]) extends VTree
 

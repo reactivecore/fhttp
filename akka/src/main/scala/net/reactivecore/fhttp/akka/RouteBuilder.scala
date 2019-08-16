@@ -14,25 +14,17 @@ import scala.concurrent.Future
 /** Creates Akka Routes from [[ApiCall]] */
 trait RouteBuilder {
 
-  def bind[In <: HList, Out <: HList, ArgumentH <: HList, Argument, ResultV <: VTree, Result](call: ApiCall[In, Out])(
+  def bind[In <: HList, Out <: HList, ArgumentV <: VTree, Argument, ResultV <: VTree, Result](call: ApiCall[In, Out])(
     implicit
-    requestDecoder: RequestDecoder.Aux[In, ArgumentH],
-    argumentLister: SimpleArgumentLister.Aux[ArgumentH, Argument],
+    requestDecoder: RequestDecoder.Aux[In, ArgumentV],
+    requestConversion: TupleConversion.Aux[ArgumentV, Argument],
     resultEncoder: ResponseEncoder.Aux[Out, ResultV],
     responseConversion: TupleConversion.Aux[ResultV, Result]
   ): Binder[Argument, Result] = {
     val appliedDecoder = requestDecoder.build(call.input)
     val appliedEncoder = resultEncoder.build(call.output)
 
-    val liftedInput: RequestDecoder.Fn[Argument] = { request =>
-      import request.executionContext
-      appliedDecoder(request).map {
-        _.right.map {
-          case (req, value) => req -> argumentLister.unlift(value)
-        }
-      }
-    }
-
+    val liftedInput = RequestDecoder.mapFn(appliedDecoder, requestConversion.toTuple)
     val liftedOutput = ResponseEncoder.contraMapFn(appliedEncoder, responseConversion.fromTuple)
 
     Binder(

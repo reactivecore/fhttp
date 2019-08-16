@@ -18,12 +18,12 @@ trait ApiServerRoute extends Route {
   private val routeBuilder = List.newBuilder[Route]
 
   /** Bind an Api Call to a function and add it to the routes. */
-  protected def bind[In <: HList, Out <: HList, ArgumentH <: HList, Argument, ResultV <: VTree, Result](
+  protected def bind[In <: HList, Out <: HList, ArgumentV <: VTree, Argument, ResultV <: VTree, Result](
     call: ApiCall[In, Out]
   )(
     implicit
-    requestDecoder: RequestDecoder.Aux[In, ArgumentH],
-    argumentLister: SimpleArgumentLister.Aux[ArgumentH, Argument],
+    requestDecoder: RequestDecoder.Aux[In, ArgumentV],
+    requestConversion: TupleConversion.Aux[ArgumentV, Argument],
     resultEncoder: ResponseEncoder.Aux[Out, ResultV],
     responseConversion: TupleConversion.Aux[ResultV, Result]
   ): AddingBinder[In, Out, Argument, Result] = {

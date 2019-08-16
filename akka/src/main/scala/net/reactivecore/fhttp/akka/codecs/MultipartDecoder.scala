@@ -3,16 +3,17 @@ package net.reactivecore.fhttp.akka.codecs
 import akka.http.scaladsl.model.Multipart.FormData
 import akka.http.scaladsl.server.RequestContext
 import akka.http.scaladsl.unmarshalling.Unmarshal
-import akka.stream.scaladsl.{ Sink, Source }
+import akka.stream.scaladsl.{Sink, Source}
 import akka.util.ByteString
 import net.reactivecore.fhttp.Input.Multipart
 import net.reactivecore.fhttp.akka.codecs.RequestDecoder.DecodingError
+import net.reactivecore.fhttp.helper.VTree
 import shapeless._
 
 import scala.concurrent.Future
 
 trait MultipartDecoder[MultipartDefinition] {
-  type Output
+  type Output <: VTree
 
   def build(definition: MultipartDefinition): MultipartDecoder.Fn[Output]
 
@@ -25,7 +26,7 @@ object MultipartDecoder {
 
   type Fn[Output] = (RequestContext, FormData.Strict) => Future[Either[RequestDecoder.DecodingError, Output]]
 
-  private def make[Step, Producing](f: Step => Fn[Producing]): Aux[Step, Producing] = new MultipartDecoder[Step] {
+  private def make[Step, Producing <: VTree](f: Step => Fn[Producing]): Aux[Step, Producing] = new MultipartDecoder[Step] {
     override type Output = Producing
 
     override def build(s: Step): Fn[Output] = {
@@ -33,7 +34,7 @@ object MultipartDecoder {
     }
   }
 
-  implicit val textDecoder = make[Multipart.MultipartText, String] { step => (req, formData) => {
+  implicit val textDecoder = make[Multipart.MultipartText, VTree.Leaf[String]] { step => (req, formData) => {
     import req._
     formData.strictParts.find(_.name == step.name) match {
       case None =>
@@ -44,7 +45,7 @@ object MultipartDecoder {
   }
   }
 
-  implicit val binaryDecoder = make[Multipart.MultipartFile, (String, Source[ByteString, _])] { step => (req, formData) => {
+  implicit val binaryDecoder = make[Multipart.MultipartFile, VTree.LeafBranch[String, Source[ByteString, _]]] { step => (req, formData) => {
     import req._
     formData.strictParts.find(_.name == step.name) match {
       case None =>
@@ -52,16 +53,16 @@ object MultipartDecoder {
       case Some(field) =>
         // Is this really streaming?
         val contentType = field.entity.contentType.value
-        Future.successful(Right(contentType -> field.entity.dataBytes))
+        Future.successful(Right(VTree.Branch.fromLeafs(contentType, field.entity.dataBytes)))
     }
   }
   }
 
-  implicit def headDecoder[H, HD, T <: HList, TC <: HList](
+  implicit def headDecoder[H, HD <: VTree, T <: HList, TC <: VTree](
     implicit
     h: MultipartDecoder.Aux[H, HD],
     a: MultipartDecoder.Aux[T, TC]
-  ) = make[H :: T, HD :: TC] { step =>
+  ) = make[H :: T, VTree.Branch[HD, TC]] { step =>
     val tailPrepared = a.build(step.tail)
     val headPrepared = h.build(step.head)
     (req, strictForm) => {
@@ -72,13 +73,13 @@ object MultipartDecoder {
           headPrepared.apply(req, strictForm).map {
             case Left(error) => Left(error)
             case Right(headValue) => {
-              Right(headValue :: tailValue)
+              Right(VTree.Branch(headValue, tailValue))
             }
           }
       }
     }
   }
 
-  implicit val nilDecoder = make[HNil, HNil] { _ => (_, step) => Future.successful(Right(HNil))
+  implicit val nilDecoder = make[HNil, VTree.Empty] { _ => (_, step) => Future.successful(Right(VTree.Empty))
   }
 }

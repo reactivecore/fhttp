@@ -144,7 +144,7 @@ class AkkaTest extends TestBase {
       }
 
       bind(Api1.Multipart).to {
-        case (text, (contentType, data)) =>
+        case (text, data, contentType) =>
           val collected = collectByteSource(data).utf8String
           Future.successful(text + "," + contentType + "," + collected)
       }
