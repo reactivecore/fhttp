@@ -18,10 +18,10 @@ class ApiClient(requestExecutor: RequestExecutor, rootUri: Uri)(implicit ec: Exe
     this(httpExt.singleRequest(_), rootUri)
   }
 
-  def prepare[In <: HList, Out <: HList, ArgumentH <: HList, Argument, ResultT <: VTree, Result](call: ApiCall[In, Out])(
+  def prepare[In <: HList, Out <: HList, ArgumentV <: VTree, Argument, ResultT <: VTree, Result](call: ApiCall[In, Out])(
     implicit
-    encoder: RequestEncoder.Aux[In, ArgumentH],
-    argumentLister: SimpleArgumentLister.Aux[ArgumentH, Argument],
+    encoder: RequestEncoder.Aux[In, ArgumentV],
+    requestConversion: TupleConversion.Aux[ArgumentV, Argument],
     responseDecoder: ResponseDecoder.Aux[Out, ResultT],
     responseConversion: TupleConversion.Aux[ResultT, Result]
   ): Argument => Future[Result] = {
@@ -29,7 +29,7 @@ class ApiClient(requestExecutor: RequestExecutor, rootUri: Uri)(implicit ec: Exe
     val builtResponseDecoder = responseDecoder.build(call.output)
     val liftedDecoder = ResponseDecoder.mapFn(builtResponseDecoder, responseConversion.toTuple)
     args => {
-      val argsLifted = argumentLister.lift(args)
+      val argsLifted = requestConversion.fromTuple(args)
       val req = requestBuilder(argsLifted)
       val context = new DecodingContext()
       val responseFuture = requestExecutor(req)

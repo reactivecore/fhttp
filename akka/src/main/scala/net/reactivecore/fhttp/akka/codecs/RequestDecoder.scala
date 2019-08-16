@@ -1,19 +1,17 @@
 package net.reactivecore.fhttp.akka.codecs
 
-import akka.http.scaladsl.common.StrictForm
-import akka.http.scaladsl.server.PathMatcher.{Matched, Unmatched}
-import akka.http.scaladsl.server.{PathMatchers, RequestContext}
+import akka.http.scaladsl.server.PathMatcher.{ Matched, Unmatched }
+import akka.http.scaladsl.server.{ PathMatchers, RequestContext }
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
-import io.circe.Decoder
-import net.reactivecore.fhttp.{Input, TypedInput}
-import net.reactivecore.fhttp.akka.{AkkaHttpHelper, codecs}
-import net.reactivecore.fhttp.helper.{ConcatenateAndSplitHList, SimpleArgumentLister, VTree}
+import net.reactivecore.fhttp.akka.AkkaHttpHelper
+import net.reactivecore.fhttp.helper.VTree
+import net.reactivecore.fhttp.{ Input, TypedInput }
 import shapeless._
 
-import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Failure, Success}
+import scala.concurrent.{ ExecutionContext, Future }
+import scala.util.{ Failure, Success }
 
 /** Counterpart to RequestBuilder, decodes a Request */
 trait RequestDecoder[Step] {
@@ -37,14 +35,16 @@ object RequestDecoder {
   type Fn[Output] = RequestContext => Future[Either[DecodingError, (RequestContext, Output)]]
 
   def mapFn[From, To](f: Fn[From], m: From => To): Fn[To] = {
-    context => {
-      import context._
-      f(context).map {
-        _.right.map { case (context, value) =>
-          context -> m(value)
+    context =>
+      {
+        import context._
+        f(context).map {
+          _.right.map {
+            case (context, value) =>
+              context -> m(value)
+          }
         }
       }
-    }
   }
 
   type Aux[Step, OutputT] = RequestDecoder[Step] {

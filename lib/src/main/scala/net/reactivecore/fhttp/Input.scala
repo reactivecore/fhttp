@@ -54,8 +54,8 @@ object Input {
 
     // Convenience constructors for Multiparts
     def make[A <: MultipartPart](a: A) = Multipart(a :: HNil)
-    def make[A <: MultipartPart, B <: MultipartPart](a: A, b: B) = Multipart(b :: a :: HNil)
-    def make[A <: MultipartPart, B <: MultipartPart, C <: MultipartPart](a: A, b: B, c: C) = Multipart(c :: b :: a :: HNil)
+    def make[A <: MultipartPart, B <: MultipartPart](a: A, b: B) = Multipart(a :: b :: HNil)
+    def make[A <: MultipartPart, B <: MultipartPart, C <: MultipartPart](a: A, b: B, c: C) = Multipart(a :: b :: c :: HNil)
   }
 
   def text(limit: Option[Long] = None): MappedPayload[String] = MappedPayload(TextMapping, limit)

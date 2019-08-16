@@ -3,7 +3,9 @@ package net.reactivecore.fhttp
 import shapeless._
 
 case class ApiCallBuilder[In <: HList, Out <: HList](
-    call: ApiCall[In, Out]
+    header: ApiHeader,
+    reverseInput: In,
+    reverseOutput: Out
 ) {
 
   def expecting[T <: Input](
@@ -16,13 +18,13 @@ case class ApiCallBuilder[In <: HList, Out <: HList](
 
   private def addInputStep[U](step: U) = {
     copy(
-      call = call.copy(input = step :: call.input)
+      reverseInput = step :: reverseInput
     )
   }
 
   private def addOutputStep[U](step: U) = {
     copy(
-      call = call.copy(output = step :: call.output)
+      reverseOutput = step :: reverseOutput
     )
   }
 }

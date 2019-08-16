@@ -1,7 +1,7 @@
 package net.reactivecore.fhttp
 
 import shapeless._
-import shapeless.ops.hlist.Tupler
+import shapeless.ops.hlist.{ Reverse, Tupler }
 
 /** A Builder for APIs. */
 trait ApiBuilder {
@@ -31,10 +31,14 @@ trait ApiBuilder {
   protected def output: Output.type = Output
 
   private def empty(header: ApiHeader): ApiCallBuilder[HNil, HNil] = {
-    ApiCallBuilder(ApiCall(header, HNil, HNil))
+    ApiCallBuilder(header, HNil, HNil)
   }
 
-  protected def add[In <: HList: Tupler, Out <: HList](builder: ApiCallBuilder[In, Out]) = {
-    builder.call
+  protected def add[In <: HList: Reverse: Tupler, Out <: HList: Reverse](builder: ApiCallBuilder[In, Out]) = {
+    ApiCall(
+      builder.header,
+      builder.reverseInput.reverse,
+      builder.reverseOutput.reverse
+    )
   }
 }
