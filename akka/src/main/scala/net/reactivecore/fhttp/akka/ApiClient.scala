@@ -39,7 +39,7 @@ class ApiClient(requestExecutor: RequestExecutor, rootUri: Uri)(implicit ec: Exe
     }
   }
 
-  private def prepareHttpRequestBuilder[In <: HList, ArgumentH <: HList, Argument](call: ApiCall[In, _])(
+  private def prepareHttpRequestBuilder[In <: HList, Argument](call: ApiCall[In, _])(
     implicit
     encoder: codecs.RequestEncoder.Aux[In, Argument]
   ): Argument => HttpRequest = {
