@@ -24,7 +24,7 @@ object ResponseEncoder {
   type Fn[Input] = (HttpResponse, Input) => HttpResponse
 
   /** Applies a function c for input values before applying fn. */
-  def contraMapFn[Input, X](fn: Fn[Input], c: X => Input): Fn[X] = { (response, input) =>
+  def contraMapFn[From, To](fn: Fn[From], c: To => From): Fn[To] = { (response, input) =>
     fn(response, c(input))
   }
 

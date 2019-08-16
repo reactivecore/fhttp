@@ -6,7 +6,8 @@ import akka.stream.Materializer
 import net.reactivecore.fhttp.ApiCall
 import net.reactivecore.fhttp.akka.ApiClient.RequestExecutor
 import net.reactivecore.fhttp.akka.codecs.{ DecodingContext, RequestEncoder, ResponseDecoder }
-import net.reactivecore.fhttp.helper.SimpleArgumentLister
+import net.reactivecore.fhttp.helper.{ SimpleArgumentLister, VTree }
+import net.reactivecore.fhttp.helper.VTree.TupleConversion
 import shapeless._
 
 import scala.concurrent.{ ExecutionContext, Future }
@@ -17,22 +18,23 @@ class ApiClient(requestExecutor: RequestExecutor, rootUri: Uri)(implicit ec: Exe
     this(httpExt.singleRequest(_), rootUri)
   }
 
-  def prepare[In <: HList, Out <: HList, ArgumentH <: HList, Argument, ResultH <: HList, Result](call: ApiCall[In, Out])(
+  def prepare[In <: HList, Out <: HList, ArgumentH <: HList, Argument, ResultT <: VTree, Result](call: ApiCall[In, Out])(
     implicit
     encoder: RequestEncoder.Aux[In, ArgumentH],
     argumentLister: SimpleArgumentLister.Aux[ArgumentH, Argument],
-    responseDecoder: ResponseDecoder.Aux[Out, ResultH],
-    resultLister: SimpleArgumentLister.Aux[ResultH, Result]
+    responseDecoder: ResponseDecoder.Aux[Out, ResultT],
+    responseConversion: TupleConversion.Aux[ResultT, Result]
   ): Argument => Future[Result] = {
     val requestBuilder = prepareHttpRequestBuilder(call)
-    val decoder = responseDecoder.map(resultLister.unlift).build(call.output)
+    val builtResponseDecoder = responseDecoder.build(call.output)
+    val liftedDecoder = ResponseDecoder.mapFn(builtResponseDecoder, responseConversion.toTuple)
     args => {
       val argsLifted = argumentLister.lift(args)
       val req = requestBuilder(argsLifted)
       val context = new DecodingContext()
       val responseFuture = requestExecutor(req)
       responseFuture.flatMap { response =>
-        decoder(response, context)
+        liftedDecoder(response, context)
       }
     }
   }

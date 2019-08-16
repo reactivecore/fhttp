@@ -8,6 +8,7 @@ import akka.util.ByteString
 import io.circe.Decoder
 import net.reactivecore.fhttp.Output
 import net.reactivecore.fhttp.akka.AkkaHttpHelper
+import net.reactivecore.fhttp.helper.VTree
 import shapeless._
 
 import scala.concurrent.{ ExecutionContext, Future }
@@ -19,23 +20,9 @@ class DecodingContext(
 )
 
 trait ResponseDecoder[OutputStep] {
-  type Output <: Any
+  type Output <: VTree
 
   def build(step: OutputStep): ResponseDecoder.Fn[Output]
-
-  def map[X](f: Output => X) = new ResponseDecoder[OutputStep] {
-    override type Output = X
-
-    override def build(step: OutputStep): ResponseDecoder.Fn[X] = {
-      val built = ResponseDecoder.this.build(step)
-      (response, context) => {
-        import context._
-        built(response, context).map { result =>
-          f(result)
-        }
-      }
-    }
-  }
 }
 
 object ResponseDecoder {
@@ -45,9 +32,20 @@ object ResponseDecoder {
 
   type Fn[Output] = (HttpResponse, DecodingContext) => Future[Output]
 
+  /** Map the function m onto the result of f. */
+  def mapFn[From, To](f: Fn[From], m: From => To): Fn[To] = {
+    (response, context) =>
+      {
+        import context._
+        f(response, context).map { result =>
+          m(result)
+        }
+      }
+  }
+
   def apply[Step](implicit rd: ResponseDecoder[Step]): Aux[Step, rd.Output] = rd
 
-  def make[Step, Producing](f: Step => (HttpResponse, DecodingContext) => Future[Producing]): Aux[Step, Producing] = new ResponseDecoder[Step] {
+  def make[Step, Producing <: VTree](f: Step => (HttpResponse, DecodingContext) => Future[Producing]): Aux[Step, Producing] = new ResponseDecoder[Step] {
     override type Output = Producing
 
     override def build(step: Step): (HttpResponse, DecodingContext) => Future[Producing] = {
@@ -55,7 +53,16 @@ object ResponseDecoder {
     }
   }
 
-  implicit def decodeMapped[T] = make[Output.MappedPayload[T], T] { step =>
+  def makeLeaf[Step, Producing](f: Step => Fn[Producing]): Aux[Step, VTree.Leaf[Producing]] = new ResponseDecoder[Step] {
+    override type Output = VTree.Leaf[Producing]
+
+    override def build(step: Step): Fn[VTree.Leaf[Producing]] = {
+      val built = f(step)
+      mapFn(built, VTree.Leaf.apply)
+    }
+  }
+
+  implicit def decodeMapped[T] = makeLeaf[Output.MappedPayload[T], T] { step =>
     implicit val unmapper = AkkaHttpHelper.unmarshallerFromMapping(step.mapping)
     (response, context) => {
       import context._
@@ -71,48 +78,57 @@ object ResponseDecoder {
     }
   }
 
-  implicit val decodeBinary = make[Output.Binary.type, (String, Source[ByteString, _])] { step => (response, _) => {
+  implicit val decodeBinary = make[Output.Binary.type, VTree.Branch[VTree.Leaf[String], VTree.Leaf[Source[ByteString, _]]]] { step => (response, _) => {
     val contentType = response.entity.contentType.value
     val source = response.entity.dataBytes
     Future.successful(
-      contentType -> source
+      VTree.Branch.fromLeafs(contentType, source)
     )
   }
   }
 
-  implicit def decodeFailureSuccess[F <: Output, S <: Output, FT, ST](
+  implicit def decodeFailureSuccess[F <: Output, S <: Output, FT <: VTree, ST <: VTree](
     implicit
     f: ResponseDecoder.Aux[F, FT],
     s: ResponseDecoder.Aux[S, ST]
-  ) = make[Output.ErrorSuccess[F, S], Either[(Int, FT), ST]] { step =>
+  ) = make[Output.ErrorSuccess[F, S], VTree.ContraBranch[VTree.Branch[VTree.Leaf[Int], FT], ST]] { step =>
     val preparedFailure = f.build(step.f)
     val preparedSuccess = s.build(step.s)
     (response, context) => {
       import context._
       if (response.status.isSuccess()) {
-        preparedSuccess(response, context).map(Right(_))
+        preparedSuccess(response, context).map { successValue =>
+          VTree.ContraBranch(
+            Right(successValue)
+          )
+        }
       } else {
         preparedFailure(response, context).map { parsed =>
-          Left(response.status.intValue() -> parsed)
+          val statusCode = response.status.intValue()
+          VTree.ContraBranch(
+            Left(
+              VTree.Branch(VTree.Leaf(statusCode), parsed)
+            )
+          )
         }
       }
     }
   }
 
-  implicit val decodeEmpty = make[Output.Empty.type, Unit] { _ => (_, _) =>
-    Future.successful(())
+  implicit val decodeEmpty = make[Output.Empty.type, VTree.Empty] { _ => (_, _) =>
+    Future.successful(VTree.Empty)
   }
 
-  implicit val decodeNil = make[HNil, HNil] { _ => (_, _) => {
-    Future.successful(HNil)
+  implicit val decodeNil = make[HNil, VTree.Empty] { _ => (_, _) => {
+    Future.successful(VTree.Empty)
   }
   }
 
-  implicit def decodeElem[H, T <: HList, X <: HList](
+  implicit def decodeElem[H, T <: HList, HT <: VTree, TT <: VTree](
     implicit
-    h: ResponseDecoder[H],
-    aux: ResponseDecoder.Aux[T, X]
-  ) = make[H :: T, h.Output :: X] { step =>
+    h: ResponseDecoder.Aux[H, HT],
+    aux: ResponseDecoder.Aux[T, TT]
+  ) = make[H :: T, VTree.Branch[HT, TT]] { step =>
     val decodeTail = aux.build(step.tail)
     val decodeHead = h.build(step.head)
     (response, context) => {
@@ -123,7 +139,7 @@ object ResponseDecoder {
         decodedTail <- decodeTailFuture
         decodedHead <- decodeHeadFuture
       } yield {
-        decodedHead :: decodedTail
+        VTree.Branch(decodedHead, decodedTail)
       }
     }
   }
