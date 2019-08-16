@@ -50,6 +50,5 @@ TODO
 - Improved conversion routines (e.g. Boolean query parameters)
 - Extending
 - Multi part decoding on Akka Server side buffers the request in Memory.
-- Response Encoding/Decoding is using primitive values, while Request Encoding/Decoding is using HList values for flattening purposes.
 
 
