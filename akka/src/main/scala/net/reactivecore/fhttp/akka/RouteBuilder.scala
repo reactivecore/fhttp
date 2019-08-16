@@ -5,7 +5,8 @@ import akka.http.scaladsl.server.{ MethodRejection, RequestContext, Route, Route
 import net.reactivecore.fhttp.akka.codecs.RequestDecoder.DecodingError
 import net.reactivecore.fhttp.{ ApiCall, ApiHeader }
 import net.reactivecore.fhttp.akka.codecs.{ RequestDecoder, ResponseEncoder }
-import net.reactivecore.fhttp.helper.SimpleArgumentLister
+import net.reactivecore.fhttp.helper.{ SimpleArgumentLister, VTree }
+import net.reactivecore.fhttp.helper.VTree.TupleConversion
 import shapeless._
 
 import scala.concurrent.Future
@@ -13,14 +14,15 @@ import scala.concurrent.Future
 /** Creates Akka Routes from [[ApiCall]] */
 trait RouteBuilder {
 
-  def bind[In <: HList, Out <: HList, ArgumentH <: HList, Argument, ResultH <: HList, Result](call: ApiCall[In, Out])(
+  def bind[In <: HList, Out <: HList, ArgumentH <: HList, Argument, ResultV <: VTree, Result](call: ApiCall[In, Out])(
     implicit
     requestDecoder: RequestDecoder.Aux[In, ArgumentH],
     argumentLister: SimpleArgumentLister.Aux[ArgumentH, Argument],
-    resultEncoder: ResponseEncoder.Aux[Out, ResultH],
-    responseLister: SimpleArgumentLister.Aux[ResultH, Result]
+    resultEncoder: ResponseEncoder.Aux[Out, ResultV],
+    responseConversion: TupleConversion.Aux[ResultV, Result]
   ): Binder[Argument, Result] = {
     val appliedDecoder = requestDecoder.build(call.input)
+    val appliedEncoder = resultEncoder.build(call.output)
 
     val liftedInput: RequestDecoder.Fn[Argument] = { request =>
       import request.executionContext
@@ -31,10 +33,12 @@ trait RouteBuilder {
       }
     }
 
+    val liftedOutput = ResponseEncoder.contraMapFn(appliedEncoder, responseConversion.fromTuple)
+
     Binder(
       call.header,
       liftedInput,
-      resultEncoder.contraMap(responseLister.lift).build(call.output)
+      liftedOutput
     )
   }
 
