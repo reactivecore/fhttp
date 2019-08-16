@@ -1,10 +1,10 @@
 package net.reactivecore.fhttp.akka
 
-import akka.http.scaladsl.model.{HttpRequest, HttpResponse}
-import akka.stream.scaladsl.{Sink, Source}
+import akka.http.scaladsl.model.{ HttpRequest, HttpResponse }
+import akka.stream.scaladsl.{ Sink, Source }
 import akka.util.ByteString
-import net.reactivecore.fhttp.akka.codecs.{RequestDecoder, RequestEncoder}
-import net.reactivecore.fhttp.{ApiBuilder, Input, Output}
+import net.reactivecore.fhttp.akka.codecs.{ RequestDecoder, RequestEncoder, ResponseDecoder, ResponseEncoder }
+import net.reactivecore.fhttp.{ ApiBuilder, Input, Output }
 import shapeless._
 
 import scala.concurrent.Future
@@ -236,16 +236,4 @@ class AkkaTest extends TestBase {
     val response11 = await(client.deepPath("1", "2"))
     response11 shouldBe "1,2"
   }
-
-  it should "look nice in IntelliJ" in {
-    def makeRE[T,P](in: T)(implicit requestEncoder: RequestEncoder.Aux[T, P]) = {
-      requestEncoder
-    }
-    def makeRD[T,P](in: T)(implicit requestDecoder: RequestDecoder.Aux[T, P]) = {
-      requestDecoder
-    }
-    val a1 = makeRE(Api1.HelloWorld.input)
-    val a2 = makeRD(Api1.HelloWorld.input)
-  }
-
 }

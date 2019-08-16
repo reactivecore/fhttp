@@ -34,9 +34,9 @@ trait ApiBuilder {
     ApiCallBuilder(header, HNil, HNil)
   }
 
-  protected def add[InReverse <: HList, In <: HList, OutReverse <: HList, Out <: HList]
-  (builder: ApiCallBuilder[InReverse, OutReverse])(
-    implicit inReverse: Reverse.Aux[InReverse, In],
+  protected def add[InReverse <: HList, In <: HList, OutReverse <: HList, Out <: HList](builder: ApiCallBuilder[InReverse, OutReverse])(
+    implicit
+    inReverse: Reverse.Aux[InReverse, In],
     outReverse: Reverse.Aux[OutReverse, Out]
   ): ApiCall[In, Out] = {
     ApiCall(
