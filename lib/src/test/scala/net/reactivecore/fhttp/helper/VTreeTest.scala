@@ -40,6 +40,7 @@ class VTreeTest extends TestBase {
     testBoth(Leaf(5), 5 :: HNil, 5)
     testBoth(Branch(Leaf(3), Leaf("H")), 3 :: "H" :: HNil, (3, "H"))
     TupleConversion.pair[Leaf[Int], Int, Leaf[Int], Int, (Int, Int)]
+    TupleConversion[Branch[Leaf[Int], Leaf[Int]]]
     testTupleConversion(
       Branch.fromLeafs("a", 2),
       ("a", 2)
@@ -57,6 +58,7 @@ class VTreeTest extends TestBase {
       Branch(Branch.fromLeafs(1, 2), Branch.fromLeafs(3, 4)),
       1 :: 2 :: 3 :: 4 :: HNil,
       (1, 2, 3, 4))
+
     testBoth(
       Branch(Branch.fromLeafs(1, 2), Leaf(3)),
       1 :: 2 :: 3 :: HNil,

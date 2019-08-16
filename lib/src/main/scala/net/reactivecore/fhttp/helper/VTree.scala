@@ -147,6 +147,12 @@ object VTree {
       v => Leaf(v)
     )
 
+    // Shortcut
+    implicit def valuePair[L, R] = make[Branch[Leaf[L], Leaf[R]], (L, R)](
+      v => (v.l.x, v.r.x),
+      v => Branch.fromLeafs(v._1, v._2)
+    )
+
     implicit def pair[L <: VTree, LR, R <: VTree, RR, Result](
       implicit
       lc: TupleConversion.Aux[L, LR],
