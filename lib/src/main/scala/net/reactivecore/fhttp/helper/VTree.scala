@@ -1,5 +1,7 @@
 package net.reactivecore.fhttp.helper
 
+import shapeless._
+
 /**
  * A tree which can contain either tuples ([[VTree.Branch]]), Eithers ([[VTree.ContraBranch]]) or values ([[VTree.Leaf]]).
  *
@@ -29,6 +31,77 @@ object VTree {
   /** The empty tuple Tree. */
   sealed trait Empty extends VTree
   case object Empty extends Empty
+
+  /** Converts VTree to flat HLists. */
+  trait HListConversion[T <: VTree] {
+    type Result <: HList
+
+    def toHList(value: T): Result
+
+    def fromHList(result: Result): T
+  }
+
+  object HListConversion {
+    type Aux[TT <: VTree, Result0] = HListConversion[TT] {
+      type Result = Result0
+    }
+
+    private def make[V <: VTree, R <: HList](f: V => R, b: R => V): Aux[V, R] = new HListConversion[V] {
+      override type Result = R
+
+      override def toHList(value: V): R = f(value)
+
+      override def fromHList(tuple: R): V = b(tuple)
+    }
+
+    implicit val empty: Aux[Empty, HNil] = make[Empty, HNil](
+      { _ => HNil },
+      { _ => Empty }
+    )
+
+    // TODO: Why is this method necessary?
+    implicit val empty2: Aux[Empty.type, HNil] = make[Empty.type, HNil](
+      { _ => HNil },
+      { _ => Empty }
+    )
+
+    implicit def leaf[T] = make[Leaf[T], T :: HNil](
+      v => v.x :: HNil,
+      v => Leaf(v.head)
+    )
+
+    implicit def pair[L <: VTree, LR <: HList, R <: VTree, RR <: HList, Result <: HList](
+      implicit
+      lc: HListConversion.Aux[L, LR],
+      rc: HListConversion.Aux[R, RR],
+      concatAndSplit: HListConcatAndSplit.Aux[LR, RR, Result]
+    ) = make[Branch[L, R], Result](
+      v => concatAndSplit.concat(lc.toHList(v.l), rc.toHList(v.r)),
+      v => {
+        val (l, r) = concatAndSplit.split(v)
+        Branch(lc.fromHList(l), rc.fromHList(r))
+      }
+    )
+
+    implicit def contra[L <: VTree, LR, R <: VTree, RR](
+      implicit
+      lc: HListConversion.Aux[L, LR],
+      rc: HListConversion.Aux[R, RR]
+    ) = make[ContraBranch[L, R], Either[LR, RR] :: HNil](
+      v => {
+        v.v match {
+          case Left(left)   => Left(lc.toHList(left)) :: HNil
+          case Right(right) => Right(rc.toHList(right)) :: HNil
+        }
+      },
+      v => v.head match {
+        case Left(left) =>
+          ContraBranch(Left(lc.fromHList(left)))
+        case Right(right) =>
+          ContraBranch(Right(rc.fromHList(right)))
+      }
+    )
+  }
 
   /** Converts tuple trees to values. */
   trait TupleConversion[T <: VTree] {
