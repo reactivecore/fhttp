@@ -1,11 +1,11 @@
 package net.reactivecore.fhttp.akka
 
 import akka.http.scaladsl.model.HttpResponse
-import akka.http.scaladsl.server.{MalformedRequestContentRejection, MethodRejection, RequestContext, Route, RouteResult}
+import akka.http.scaladsl.server.{ MalformedRequestContentRejection, MethodRejection, RequestContext, Route, RouteResult }
 import net.reactivecore.fhttp.akka.codecs.RequestDecoder.DecodingError
-import net.reactivecore.fhttp.{ApiCall, ApiHeader}
-import net.reactivecore.fhttp.akka.codecs.{RequestDecoder, ResponseEncoder}
-import net.reactivecore.fhttp.helper.{SimpleArgumentLister, VTree}
+import net.reactivecore.fhttp.{ ApiCall, ApiHeader }
+import net.reactivecore.fhttp.akka.codecs.{ RequestDecoder, ResponseEncoder }
+import net.reactivecore.fhttp.helper.{ SimpleArgumentLister, VTree }
 import net.reactivecore.fhttp.helper.VTree.TupleConversion
 import shapeless._
 
@@ -70,7 +70,7 @@ trait RouteBuilder {
       requestDecoder(requestContext).flatMap {
         case Left(e: DecodingError) =>
           requestContext.reject()
-          // TODO: Better error messages
+        // TODO: Better error messages
         case Right((_, decoded)) =>
           for {
             executed <- f(decoded)
