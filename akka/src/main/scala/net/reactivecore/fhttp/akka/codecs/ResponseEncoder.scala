@@ -7,23 +7,13 @@ import io.circe.Encoder
 import io.circe.syntax._
 import net.reactivecore.fhttp.Output
 import net.reactivecore.fhttp.akka.AkkaHttpHelper
+import net.reactivecore.fhttp.helper.VTree
 import shapeless._
 
 trait ResponseEncoder[Step] {
-  type Input <: Any
+  type Input <: VTree
 
   def build(step: Step): ResponseEncoder.Fn[Input]
-
-  def contraMap[X](f: X => Input) = new ResponseEncoder[Step] {
-    override type Input = X
-
-    override def build(step: Step): ResponseEncoder.Fn[Input] = {
-      val built = ResponseEncoder.this.build(step)
-      (response, input) => {
-        built(response, f(input))
-      }
-    }
-  }
 }
 
 object ResponseEncoder {
@@ -33,9 +23,14 @@ object ResponseEncoder {
 
   type Fn[Input] = (HttpResponse, Input) => HttpResponse
 
+  /** Applies a function c for input values before applying fn. */
+  def contraMapFn[From, To](fn: Fn[From], c: To => From): Fn[To] = { (response, input) =>
+    fn(response, c(input))
+  }
+
   def apply[T](implicit rb: ResponseEncoder[T]): Aux[T, rb.Input] = rb
 
-  private def make[Step, Consuming](f: Step => (HttpResponse, Consuming) => HttpResponse): Aux[Step, Consuming] = new ResponseEncoder[Step] {
+  def make[Step, Consuming <: VTree](f: Step => (HttpResponse, Consuming) => HttpResponse): Aux[Step, Consuming] = new ResponseEncoder[Step] {
     override type Input = Consuming
 
     override def build(step: Step): (HttpResponse, Consuming) => HttpResponse = {
@@ -43,7 +38,16 @@ object ResponseEncoder {
     }
   }
 
-  implicit def encodeMapped[T] = make[Output.MappedPayload[T], T] { step =>
+  def makeLeaf[Step, Consuming](f: Step => Fn[Consuming]): Aux[Step, VTree.Leaf[Consuming]] = new ResponseEncoder[Step] {
+    override type Input = VTree.Leaf[Consuming]
+
+    override def build(step: Step): Fn[VTree.Leaf[Consuming]] = {
+      val built = f(step)
+      contraMapFn(built, _.x)
+    }
+  }
+
+  implicit def encodeMapped[T] = makeLeaf[Output.MappedPayload[T], T] { step =>
     val contentType = AkkaHttpHelper.forceContentType(step.mapping.contentType)
     (response, value) => {
       val encoded = step.mapping.encode(value).getOrElse {
@@ -53,22 +57,24 @@ object ResponseEncoder {
     }
   }
 
-  implicit val encodeBinaryResponse = make[Output.Binary.type, (String, Source[ByteString, _])] { step => (response, value) => {
-    val contentType = AkkaHttpHelper.forceContentType(value._1)
-    response.withEntity(HttpEntity.apply(contentType, value._2))
+  implicit val encodeBinaryResponse = make[Output.Binary.type, VTree.Branch[VTree.Leaf[String], VTree.Leaf[Source[ByteString, _]]]] { step => (response, value) => {
+    val contentType = AkkaHttpHelper.forceContentType(value.l.x)
+    response.withEntity(HttpEntity.apply(contentType, value.r.x))
   }
   }
 
-  implicit def requestErrorResponse[F <: Output, S <: Output, FT, ST](
+  implicit def requestErrorResponse[F <: Output, S <: Output, FT <: VTree, ST <: VTree](
     implicit
     f: ResponseEncoder.Aux[F, FT],
     s: ResponseEncoder.Aux[S, ST]
-  ) = make[Output.ErrorSuccess[F, S], Either[(Int, FT), ST]] { step =>
+  ) = make[Output.ErrorSuccess[F, S], VTree.ContraBranch[VTree.Branch[VTree.Leaf[Int], FT], ST]] { step =>
     val preparedFailure = f.build(step.f)
     val preparedSuccess = s.build(step.s)
     (response, value) => {
-      value match {
-        case Left((statusCode, value)) =>
+      value.v match {
+        case Left(bad) =>
+          val statusCode = bad.l.x
+          val value = bad.r
           if (statusCode >= 200 && statusCode < 300) {
             println(s"Error with status code ${statusCode} ??")
           }
@@ -79,19 +85,21 @@ object ResponseEncoder {
     }
   }
 
-  implicit val encodeNil = make[HNil, HNil] { _ => (response, _) => response
+  implicit val encodeEmpty = make[Output.Empty.type, VTree.Empty] { _ => (response, _) => response }
+
+  implicit val encodeNil = make[HNil, VTree.Empty] { _ => (response, _) => response
   }
 
-  implicit def encodeElem[H, T <: HList, X <: HList](
+  implicit def encodeElem[H, HT <: VTree, T <: HList, TT <: VTree](
     implicit
-    h: ResponseEncoder[H],
-    aux: ResponseEncoder.Aux[T, X]
-  ) = make[H :: T, h.Input :: X] { step =>
+    h: ResponseEncoder.Aux[H, HT],
+    aux: ResponseEncoder.Aux[T, TT]
+  ) = make[H :: T, VTree.Branch[HT, TT]] { step =>
     val preparedTail = aux.build(step.tail)
     val preparedHead = h.build(step.head)
     (response, input) => {
-      val afterTail = preparedTail(response, input.tail)
-      val afterHead = preparedHead(afterTail, input.head)
+      val afterTail = preparedTail(response, input.r)
+      val afterHead = preparedHead(afterTail, input.l)
       afterHead
     }
   }

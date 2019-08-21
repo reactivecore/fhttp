@@ -45,9 +45,12 @@ TODO
 - Testing
 - Better error handling
 - Better path handling
-- More HTTP Methods instead of `GET`, `POST` and `DELETE`
+- More HTTP Methods (right now only `GET`, `POST` and `DELETE`)
 - Support for optional values
-- Reporting invalid calls instead of throwing an Exceptions
+- Improved conversion routines (e.g. Boolean query parameters)
+- Get rid of `VTree` if possible.
+- Reduce number of `Future` mappings if possible.
 - Extending
 - Multi part decoding on Akka Server side buffers the request in Memory.
+
 

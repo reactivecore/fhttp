@@ -3,7 +3,8 @@ package net.reactivecore.fhttp.akka
 import akka.http.scaladsl.server.{ RequestContext, Route, RouteConcatenation, RouteResult }
 import net.reactivecore.fhttp.ApiCall
 import net.reactivecore.fhttp.akka.codecs.{ RequestDecoder, ResponseEncoder }
-import net.reactivecore.fhttp.helper.SimpleArgumentLister
+import net.reactivecore.fhttp.helper.{ SimpleArgumentLister, VTree }
+import net.reactivecore.fhttp.helper.VTree.TupleConversion
 import shapeless.HList
 
 import scala.concurrent.Future
@@ -17,14 +18,14 @@ trait ApiServerRoute extends Route {
   private val routeBuilder = List.newBuilder[Route]
 
   /** Bind an Api Call to a function and add it to the routes. */
-  protected def bind[In <: HList, Out <: HList, ArgumentH <: HList, Argument, ResultH <: HList, Result](
+  protected def bind[In <: HList, Out <: HList, ArgumentV <: VTree, Argument, ResultV <: VTree, Result](
     call: ApiCall[In, Out]
   )(
     implicit
-    requestDecoder: RequestDecoder.Aux[In, ArgumentH],
-    argumentLister: SimpleArgumentLister.Aux[ArgumentH, Argument],
-    resultEncoder: ResponseEncoder.Aux[Out, ResultH],
-    responseLister: SimpleArgumentLister.Aux[ResultH, Result]
+    requestDecoder: RequestDecoder.Aux[In, ArgumentV],
+    requestConversion: TupleConversion.Aux[ArgumentV, Argument],
+    resultEncoder: ResponseEncoder.Aux[Out, ResultV],
+    responseConversion: TupleConversion.Aux[ResultV, Result]
   ): AddingBinder[In, Out, Argument, Result] = {
     val binder = RouteBuilder.bind(call)
     AddingBinder(call, binder)

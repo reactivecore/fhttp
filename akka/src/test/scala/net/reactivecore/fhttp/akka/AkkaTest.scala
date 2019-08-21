@@ -1,5 +1,6 @@
 package net.reactivecore.fhttp.akka
 
+import akka.http.scaladsl.model.{ HttpRequest, HttpResponse }
 import akka.stream.scaladsl.{ Sink, Source }
 import akka.util.ByteString
 import net.reactivecore.fhttp.{ ApiBuilder, Input, Output }
@@ -23,6 +24,16 @@ class AkkaTest extends TestBase {
           Output.ErrorSuccess(
             Output.text(),
             Output.text()
+          )
+        )
+    )
+
+    val EmptyError = add(
+      get("error2")
+        .responding(
+          Output.ErrorSuccess(
+            Output.text(),
+            Output.Empty
           )
         )
     )
@@ -66,6 +77,14 @@ class AkkaTest extends TestBase {
         .responding(Output.text())
     )
 
+    val DeepPath = add(
+      get("deep", "path")
+        .expecting(Input.ExtraPath)
+        .expecting(Input.ExtraPathFixed(List("foo", "bar")))
+        .expecting(Input.ExtraPath)
+        .responding(Output.text())
+    )
+
     val intMapping = input.pureMapping[String, Int](
       x => Right(x.toInt),
       x => Try(x.toString).toEither.left.map(_.toString)
@@ -88,6 +107,12 @@ class AkkaTest extends TestBase {
       bind(Api1.ErrorResponse).to { _ =>
         Future.successful(
           Left(401 -> "Forbidden")
+        )
+      }
+
+      bind(Api1.EmptyError).to { _ =>
+        Future.successful(
+          Right(())
         )
       }
 
@@ -119,7 +144,7 @@ class AkkaTest extends TestBase {
       }
 
       bind(Api1.Multipart).to {
-        case (text, (contentType, data)) =>
+        case (text, contentType, data) =>
           val collected = collectByteSource(data).utf8String
           Future.successful(text + "," + contentType + "," + collected)
       }
@@ -128,15 +153,27 @@ class AkkaTest extends TestBase {
         case (x, y) =>
           Future.successful(y + (x + 1).toString)
       }
+
+      bind(Api1.DeepPath).to {
+        case (first, second) =>
+          Future.successful(s"${first},${second}")
+      }
     }
     val server = new ApiServer(
       route
     )
 
-    val client = new ApiClient(http, "http://localhost:9000") {
+    val requestExecutor: HttpRequest => Future[HttpResponse] = { req =>
+      // println(s"Executing ${req.method} ${req.uri}")
+      http.singleRequest(req)
+    }
+
+    val client = new ApiClient(requestExecutor, "http://localhost:9000") {
       val helloWorldPrepared = prepare(Api1.HelloWorld)
 
       val errorResponsePrepared = prepare(Api1.ErrorResponse)
+
+      val emptyError = prepare(Api1.EmptyError)
 
       val pathDependent = prepare(Api1.PathDependent)
 
@@ -152,6 +189,8 @@ class AkkaTest extends TestBase {
 
       val mappedQueryParameter = prepare(Api1.MappedQueryParameter)
 
+      val deepPath = prepare(Api1.DeepPath)
+
     }
 
     val response = await(client.helloWorldPrepared(HNil))
@@ -159,6 +198,9 @@ class AkkaTest extends TestBase {
 
     val response2 = await(client.errorResponsePrepared(HNil))
     response2 shouldBe Left(401 -> "Forbidden")
+
+    val response2e = await(client.emptyError(()))
+    response2e shouldBe Right(())
 
     val response3 = await(client.pathDependent("file1"))
     response3 shouldBe "file1"
@@ -182,13 +224,27 @@ class AkkaTest extends TestBase {
     response8 shouldBe "boom!"
 
     val response9 = await(client.multipart.apply(
-      ("foo", "application/octet-stream" -> Source(List(ByteString("abc"), ByteString("cde"))))
+      ("foo", "application/octet-stream", Source(List(ByteString("abc"), ByteString("cde"))))
     ))
 
     response9 shouldBe "foo,application/octet-stream,abccde"
 
     val response10 = await(client.mappedQueryParameter((10, "Hello")))
     response10 shouldBe "Hello11"
-  }
 
+    val response11 = await(client.deepPath("1", "2"))
+    response11 shouldBe "1,2"
+
+    withClue("It should not be too slow") {
+      val count = 1000
+      val t0 = System.currentTimeMillis()
+      for (i <- 0 until count) {
+        await(client.multipart.apply(
+          ("foo", "application/octet-stream", Source(List(ByteString("abc"), ByteString("cde"))))
+        ))
+      }
+      val t1 = System.currentTimeMillis()
+      println(s"Executed ${count} in ${t1 - t0}ms, ${(t1 - t0) / count.toFloat}ms/req")
+    }
+  }
 }

@@ -7,10 +7,11 @@ import akka.util.ByteString
 import shapeless._
 import net.reactivecore.fhttp.Input.{ Multipart => FHttpMultipart }
 import net.reactivecore.fhttp.akka.AkkaHttpHelper
+import net.reactivecore.fhttp.helper.VTree
 
 trait MultipartEncoder[MultipartDefinition] {
 
-  type Input <: Any
+  type Input <: VTree
 
   def build(step: MultipartDefinition): MultipartEncoder.Fn[Input]
 }
@@ -25,7 +26,7 @@ object MultipartEncoder {
 
   def apply[T](implicit me: MultipartEncoder[T]): Aux[T, me.Input] = me
 
-  private def make[Step, Consuming](f: Step => Fn[Consuming]): Aux[Step, Consuming] = new MultipartEncoder[Step] {
+  private def make[Step, Consuming <: VTree](f: Step => Fn[Consuming]): Aux[Step, Consuming] = new MultipartEncoder[Step] {
     override type Input = Consuming
 
     override def build(step: Step): Fn[Input] = {
@@ -33,14 +34,14 @@ object MultipartEncoder {
     }
   }
 
-  implicit val encodeText = make[FHttpMultipart.MultipartText, String] { part => (parts, value) => {
-    Multipart.FormData.BodyPart(part.name, value) :: parts
+  implicit val encodeText = make[FHttpMultipart.MultipartText, VTree.Leaf[String]] { part => (parts, value) => {
+    Multipart.FormData.BodyPart(part.name, value.x) :: parts
   }
   }
 
-  implicit val encodeFile = make[FHttpMultipart.MultipartFile, (String, Source[ByteString, _])] { part => (parts, value) => {
-    val ct = AkkaHttpHelper.binaryContentTypeForName(value._1)
-    val entity = IndefiniteLength(ct, value._2)
+  implicit val encodeFile = make[FHttpMultipart.MultipartFile, VTree.LeafBranch[String, Source[ByteString, _]]] { part => (parts, value) => {
+    val ct = AkkaHttpHelper.binaryContentTypeForName(value.l.x)
+    val entity = IndefiniteLength(ct, value.r.x)
     val extraHeader = part.fileName.map { fileName =>
       Map("filename" -> fileName)
     }.getOrElse(Map.empty)
@@ -48,20 +49,20 @@ object MultipartEncoder {
   }
   }
 
-  implicit val encodeNil: Aux[HNil, HNil] = make[HNil, HNil] { _ => (list, _) => list
+  implicit val encodeNil: Aux[HNil, VTree.Empty] = make[HNil, VTree.Empty] { _ => (list, _) => list
   }
 
-  implicit def encodeElem[H, HC, T <: HList, TC <: HList](
+  implicit def encodeElem[H, HC <: VTree, T <: HList, TC <: VTree](
     implicit
     h: MultipartEncoder.Aux[H, HC],
     aux: MultipartEncoder.Aux[T, TC]
-  ) = make[H :: T, HC :: TC] { step =>
-    val tailPrepared = aux.build(step.tail)
+  ) = make[H :: T, VTree.Branch[HC, TC]] { step =>
     val headPrepared = h.build(step.head)
+    val tailPrepared = aux.build(step.tail)
     (list, value) => {
-      val afterTail = tailPrepared(list, value.tail)
-      val afterHead = headPrepared(afterTail, value.head)
-      afterHead
+      val afterHead = headPrepared(list, value.l)
+      val afterTail = tailPrepared(afterHead, value.r)
+      afterTail
     }
   }
 }

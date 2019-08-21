@@ -1,44 +1,53 @@
 package net.reactivecore.fhttp.akka.codecs
 
-import akka.http.scaladsl.common.StrictForm
-import akka.http.scaladsl.server.RequestContext
+import akka.http.scaladsl.server.PathMatcher.{ Matched, Unmatched }
+import akka.http.scaladsl.server.{ PathMatchers, RequestContext }
 import akka.http.scaladsl.unmarshalling.Unmarshal
+import akka.http.scaladsl.util.FastFuture
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
-import io.circe.Decoder
+import net.reactivecore.fhttp.akka.AkkaHttpHelper
+import net.reactivecore.fhttp.helper.VTree
 import net.reactivecore.fhttp.{ Input, TypedInput }
-import net.reactivecore.fhttp.akka.{ AkkaHttpHelper, codecs }
-import net.reactivecore.fhttp.helper.SimpleArgumentLister
 import shapeless._
 
-import scala.concurrent.Future
+import scala.concurrent.{ ExecutionContext, Future }
+import scala.util.{ Failure, Success }
+import akka.http.scaladsl.util.FastFuture._
 
 /** Counterpart to RequestBuilder, decodes a Request */
 trait RequestDecoder[Step] {
-  type Output
+  type Output <: VTree
 
-  // TODO: Error Error result type
   def build(s: Step): RequestDecoder.Fn[Output]
-
-  def map[X](x: Output => X) = new RequestDecoder[Step] {
-    type Output = X
-
-    override def build(s: Step): RequestDecoder.Fn[X] = {
-      val built = RequestDecoder.this.build(s)
-      context => {
-        import context._
-        built(context).map {
-          case (context2, out) =>
-            context2 -> x(out)
-        }
-      }
-    }
-  }
 }
 
 object RequestDecoder {
 
-  type Fn[Output] = RequestContext => Future[(RequestContext, Output)]
+  sealed trait DecodingError {
+    def msg: String
+  }
+  object DecodingError {
+    case class MissingExpectedValue(msg: String) extends DecodingError
+    case class InvalidPath(msg: String) extends DecodingError
+    case class InvalidPayload(msg: String) extends DecodingError
+    case class InvalidQuery(msg: String) extends DecodingError
+  }
+
+  type Fn[Output] = RequestContext => Future[Either[DecodingError, (RequestContext, Output)]]
+
+  def mapFn[From, To](f: Fn[From], m: From => To): Fn[To] = {
+    context =>
+      {
+        import context._
+        f(context).map {
+          _.right.map {
+            case (context, value) =>
+              context -> m(value)
+          }
+        }
+      }
+  }
 
   type Aux[Step, OutputT] = RequestDecoder[Step] {
     type Output = OutputT
@@ -46,7 +55,8 @@ object RequestDecoder {
 
   def apply[T](implicit rd: RequestDecoder[T]): Aux[T, rd.Output] = rd
 
-  private def make[Step, Producing](f: Step => Fn[Producing]): Aux[Step, Producing] = new RequestDecoder[Step] {
+  /** Generate a new Request Decoder. */
+  def make[Step, Producing <: VTree](f: Step => Fn[Producing]): Aux[Step, Producing] = new RequestDecoder[Step] {
     override type Output = Producing
 
     override def build(s: Step): Fn[Output] = {
@@ -54,76 +64,96 @@ object RequestDecoder {
     }
   }
 
-  implicit val stringPathDecoder = make[Input.ExtraPath.type, String] { _ => request =>
-    val head = request.unmatchedPath
-    val withoutSlash = if (head.startsWithSlash) {
-      head.dropChars(1)
-    } else {
-      head
+  implicit val stringPathDecoder = make[Input.ExtraPath.type, VTree.Leaf[String]] { _ => request =>
+    val matcher = PathMatchers.Neutral / PathMatchers.Segment
+    matcher(request.unmatchedPath) match {
+      case Matched(rest, ok) =>
+        val updated = request.withUnmatchedPath(rest)
+        FastFuture.successful(
+          Right(updated -> (VTree.Leaf(ok._1)))
+        )
+      case Unmatched =>
+        RequestDecoder.failedDecoding(DecodingError.InvalidPath("Expected sub path"))
     }
-    val updatedRequest = request.mapUnmatchedPath { _.dropChars(head.charCount) }
-    Future.successful(
-      updatedRequest -> withoutSlash.toString()
-    )
   }
 
-  implicit def mapped[T] = make[Input.MappedPayload[T], T] { step =>
+  implicit val fixedPathDecoder = make[Input.ExtraPathFixed, VTree.Empty] { step =>
+    {
+      val matcher = PathMatchers.Neutral / PathMatchers.Segments(step.pathElements.size)
+      request =>
+        matcher.apply(request.unmatchedPath) match {
+          case Matched(rest, matches) if matches._1 == step.pathElements =>
+            val updatedRequest = request.withUnmatchedPath(rest)
+            FastFuture.successful(Right(updatedRequest -> VTree.Empty))
+          case Matched(_, _) =>
+            RequestDecoder.failedDecoding(DecodingError.InvalidPath("Expected a different path"))
+          case _ =>
+            RequestDecoder.failedDecoding(DecodingError.InvalidPath(s"Expected path ${step.pathElements}"))
+        }
+    }
+  }
+
+  implicit def mapped[T] = make[Input.MappedPayload[T], VTree.Leaf[T]] { step =>
     implicit val unmarshaller = AkkaHttpHelper.unmarshallerFromMapping[T](step.mapping)
     requestContext => {
       import requestContext._
       Unmarshal(request.entity).to[T].map { decoded =>
-        requestContext -> decoded
+        Right(requestContext -> (VTree.Leaf(decoded)))
       }
     }
   }
 
-  implicit val binaryStreamDecoder = make[Input.Binary.type, (String, Source[ByteString, _])] { step => requestContext => {
+  implicit val binaryStreamDecoder = make[Input.Binary.type, VTree.LeafBranch[String, Source[ByteString, _]]] { step => requestContext => {
     val entity = requestContext.request.entity
     val contentType = entity.contentType.value
     val dataSource = entity.dataBytes
-    Future.successful(
-      requestContext -> (contentType, dataSource)
+    FastFuture.successful(
+      Right(requestContext -> VTree.Branch.fromLeafs(contentType, dataSource))
     )
   }
   }
 
-  implicit val queryParameterDecoder = make[Input.AddQueryParameter, String] { step => requestContext => {
-    val v = requestContext.request.uri.query().get(step.name).getOrElse {
-      throw new IllegalArgumentException("Missing query parameter")
+  implicit val queryParameterDecoder = make[Input.AddQueryParameter, VTree.Leaf[String]] { step => requestContext => {
+    requestContext.request.uri.query().get(step.name) match {
+      case None =>
+        failedDecoding(DecodingError.MissingExpectedValue(s"Missing Query parameter ${step.name}"))
+      case Some(ok) =>
+        FastFuture.successful(Right(requestContext -> (VTree.Leaf(ok))))
     }
-    Future.successful(requestContext -> v)
   }
   }
 
-  implicit def queryParameterMapDecoder[T] = make[Input.QueryParameterMap[T], T] { step => requestContext => {
+  implicit def queryParameterMapDecoder[T] = make[Input.QueryParameterMap[T], VTree.Leaf[T]] { step => requestContext => {
     val queryParameters = requestContext.request.uri.query().toMap
     step.mapping.decode(queryParameters) match {
       case Left(error) =>
-        // TODO: Better handling
-        throw new IllegalArgumentException(s"Could not parse request ${error}")
+        RequestDecoder.failedDecoding(DecodingError.InvalidQuery(s"Could not parse query map (${error})"))
       case Right(ok) =>
-        Future.successful(requestContext -> ok)
+        FastFuture.successful(Right(requestContext -> (VTree.Leaf(ok))))
     }
   }
   }
 
-  implicit val headerValueDecoder = make[Input.AddHeader, String] { step => requestContext => {
-    val headerValue = requestContext.request.headers.collectFirst {
+  implicit val headerValueDecoder = make[Input.AddHeader, VTree.Leaf[String]] { step => requestContext => {
+    val value = requestContext.request.headers.collectFirst {
       case h if h.name() == step.name => h.value()
-    }.getOrElse {
-      throw new IllegalArgumentException(s"Missing expected header ${step.name}")
     }
-    Future.successful(requestContext -> headerValue)
+    value match {
+      case Some(existing) =>
+        FastFuture.successful(Right(requestContext -> (VTree.Leaf(existing))))
+      case _ =>
+        RequestDecoder.failedDecoding(DecodingError.MissingExpectedValue(s"Missing expected header ${step.name}"))
+    }
+
   }
   }
 
   import scala.concurrent.duration._
   private val MultipartBufferingTimeout = 60.seconds // TODO: Make this changeable.
 
-  implicit def multipartDecoder[T <: HList, ProducingH <: HList, Producing](
+  implicit def multipartDecoder[T <: HList, Producing <: VTree](
     implicit
-    multipartDecoder: MultipartDecoder.Aux[T, ProducingH],
-    argumentLister: SimpleArgumentLister.Aux[ProducingH, Producing]
+    multipartDecoder: MultipartDecoder.Aux[T, Producing]
   ) = make[Input.Multipart[T], Producing] { step =>
     val built = multipartDecoder.build(step.parts)
     requestContext => {
@@ -134,49 +164,73 @@ object RequestDecoder {
         // Otherwise it's tricky to decode the single form fields differently.
         strictForm <- fields.toStrict(MultipartBufferingTimeout)
         values <- built(requestContext, strictForm)
-      } yield requestContext -> argumentLister.unlift(values)
+      } yield {
+        values match {
+          case Left(bad) => Left(bad)
+          case Right(ok) => Right(requestContext -> ok)
+        }
+      }
     }
   }
 
   implicit def decodeMapped[A, B, T <: TypedInput[A], V](
     implicit
-    aux: RequestDecoder.Aux[T, A]
-  ) = make[Input.MappedInput[A, B, T], B] { step =>
+    aux: RequestDecoder.Aux[T, VTree.Leaf[A]]
+  ) = make[Input.MappedInput[A, B, T], VTree.Leaf[B]] { step =>
     val built = aux.build(step.original)
     requestContext => {
       import requestContext._
       built(requestContext).map {
-        case (context, value) =>
-          val encodedValue = step.mapping.decode(value).getOrElse {
-            throw new IllegalArgumentException("Could not encode value")
-          }
-          context -> encodedValue
+        _.right.map {
+          case (context, value) =>
+            val encodedValue = step.mapping.decode(value.x).getOrElse {
+              throw new IllegalArgumentException("Could not encode value")
+            }
+            context -> (VTree.Leaf(encodedValue))
+        }
       }
     }
   }
 
-  implicit val nilDecoder = make[HNil, HNil] { _ => requestContext => {
-    Future.successful(requestContext -> HNil)
+  implicit val nilDecoder = make[HNil, VTree.Empty] { _ => requestContext => {
+    FastFuture.successful(Right(requestContext -> VTree.Empty))
   }
   }
 
-  implicit def elemDecoder[H, T <: HList, X <: HList](
+  implicit def elemDecoder[H, T <: HList, HP <: VTree, TP <: VTree](
     implicit
-    h: RequestDecoder[H],
-    aux: RequestDecoder.Aux[T, X]
-  ) = make[H :: T, h.Output :: X] { step =>
-    // head first!
+    h: RequestDecoder.Aux[H, HP],
+    aux: RequestDecoder.Aux[T, TP]
+  ) = make[H :: T, VTree.Branch[HP, TP]] { step =>
     val headPrepared = h.build(step.head)
     val tailPrepared = aux.build(step.tail)
     requestContext => {
       import requestContext._
-      for {
-        (afterHeadRequest, afterHeadResult) <- headPrepared(requestContext)
-        (afterTailRequest, afterTailResult) <- tailPrepared(afterHeadRequest)
-      } yield {
-        afterTailRequest -> (afterHeadResult :: afterTailResult)
+
+      headPrepared(requestContext).fast.flatMap {
+        case Left(bad) => FastFuture.successful(Left(bad))
+        case Right((afterHeadRequest, afterHeadResult1)) =>
+          tailPrepared(afterHeadRequest).map {
+            _.right.map {
+              case (afterTailRequest, afterTailResult) =>
+                val finalValue = VTree.Branch(afterHeadResult1, afterTailResult)
+                afterTailRequest -> finalValue
+            }
+          }
       }
     }
+  }
+
+  /** Convert the result of an unmarshalling operation into a future with extracted decoding error. */
+  private[codecs] def decodeResultToResult[T](in: Future[T])(implicit ec: ExecutionContext): Future[Either[DecodingError, VTree.Leaf[T]]] = {
+    in.transform {
+      case Failure(error) => Success(Left(DecodingError.InvalidPayload(error.getMessage)))
+      case Success(value) => Success(Right(VTree.Leaf(value)))
+    }
+  }
+
+  private[codecs] def failedDecoding(e: DecodingError): Future[Either[DecodingError, Nothing]] = {
+    FastFuture.successful(Left(e))
   }
 
 }

@@ -1,35 +1,21 @@
 package net.reactivecore.fhttp.akka.codecs
 
-import akka.http.javadsl.model.RequestEntity
 import akka.http.scaladsl.model.Uri.Query
 import akka.http.scaladsl.model.{ ContentTypes, HttpEntity, HttpHeader, HttpRequest, Multipart }
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
-import io.circe.Encoder
-import RequestEncoder.Fn
 import akka.http.scaladsl.model.HttpHeader.ParsingResult
 import net.reactivecore.fhttp.{ Input, TypedInput }
 import net.reactivecore.fhttp.akka.AkkaHttpHelper
-import net.reactivecore.fhttp.helper.SimpleArgumentLister
+import net.reactivecore.fhttp.helper.{ HListConcatAndSplit, VTree }
 import shapeless._
 
 trait RequestEncoder[Step] {
 
-  type Input <: Any
+  type Input <: VTree
 
   /** Build a Request Building method for this Part. */
   def build(step: Step): RequestEncoder.Fn[Input]
-
-  def contraMap[X](f: X => Input) = new RequestEncoder[Step] {
-    override type Input = X
-
-    override def build(step: Step): Fn[Input] = {
-      val built = RequestEncoder.this.build(step)
-      (request, input) => {
-        built(request, f(input))
-      }
-    }
-  }
 }
 
 object RequestEncoder {
@@ -40,9 +26,15 @@ object RequestEncoder {
     type Input = InputT
   }
 
+  /** Applies c before putting input to fn.  */
+  def contraMapFn[Input, Output](fn: Fn[Output], c: Input => Output): Fn[Input] = {
+    (req, input) => fn(req, c(input))
+  }
+
   def apply[T](implicit rb: RequestEncoder[T]): Aux[T, rb.Input] = rb
 
-  private def make[Step, Consuming](f: Step => (HttpRequest, Consuming) => HttpRequest): Aux[Step, Consuming] = new RequestEncoder[Step] {
+  /** Generate a new Request Encoder. */
+  def make[Step, Consuming <: VTree](f: Step => Fn[Consuming]): Aux[Step, Consuming] = new RequestEncoder[Step] {
     override type Input = Consuming
 
     override def build(step: Step): (HttpRequest, Consuming) => HttpRequest = {
@@ -50,41 +42,48 @@ object RequestEncoder {
     }
   }
 
-  // Generate a simple RequestBuilder which doesn't need much preparation
-  private def makeSimple[Step, Consuming](f: (HttpRequest, Step, Consuming) => HttpRequest) = make[Step, Consuming] { step => (request, value) => f(request, step, value)
-  }
+  /** Generate a simplified request encoder.  */
+  private def makeSimple[Step, Consuming <: VTree](f: (HttpRequest, Step, Consuming) => HttpRequest) =
+    make[Step, Consuming] { step => (request, value) => f(request, step, value)
+    }
 
-  implicit val encodeExtraPath = makeSimple[Input.ExtraPath.type, String] {
+  implicit val encodeExtraPath = makeSimple[Input.ExtraPath.type, VTree.Leaf[String]] {
     case (request, _, value) =>
-      val path = request.uri.path / value
+      val path = request.uri.path / value.x
       request.withUri(request.uri.copy(path = path))
   }
 
-  implicit val addQueryParameter = makeSimple[Input.AddQueryParameter, String] {
+  implicit val encodeExtraPathFixed = makeSimple[Input.ExtraPathFixed, VTree.Empty] {
+    case (request, step, _) =>
+      val path = step.pathElements.foldLeft(request.uri.path)(_ / _)
+      request.withUri(request.uri.copy(path = path))
+  }
+
+  implicit val addQueryParameter = makeSimple[Input.AddQueryParameter, VTree.Leaf[String]] {
     case (request, step, value) =>
-      val extended: Query = Query(request.uri.query() :+ (step.name -> value): _*)
+      val extended: Query = Query(request.uri.query() :+ (step.name -> value.x): _*)
       val uri = request.uri.withQuery(extended)
       request.copy(uri = uri)
   }
 
-  implicit def encodeMapped[T] = make[Input.MappedPayload[T], T] { step =>
+  implicit def encodeMapped[T] = make[Input.MappedPayload[T], VTree.Leaf[T]] { step =>
     val contentType = AkkaHttpHelper.forceContentType(step.mapping.contentType)
     (request, value) => {
-      val encoded = step.mapping.encode(value).getOrElse {
+      val encoded = step.mapping.encode(value.x).getOrElse {
         throw new IllegalArgumentException("Could not encode value")
       }
       request.withEntity(contentType, ByteString.fromByteBuffer(encoded))
     }
   }
 
-  implicit val encodeBinary = make[Input.Binary.type, (String, Source[ByteString, _])] { _ => (request, value) => {
-    val contentType = AkkaHttpHelper.binaryContentTypeForName(value._1)
-    request.withEntity(HttpEntity.apply(contentType, value._2))
+  implicit val encodeBinary = make[Input.Binary.type, VTree.LeafBranch[String, Source[ByteString, _]]] { _ => (request, value) => {
+    val contentType = AkkaHttpHelper.binaryContentTypeForName(value.l.x)
+    request.withEntity(HttpEntity.apply(contentType, value.r.x))
   }
   }
 
-  implicit def encodeQueryParameterMap[T] = make[Input.QueryParameterMap[T], T] { step => (request, value) => {
-    val encoded = step.mapping.encode(value).getOrElse {
+  implicit def encodeQueryParameterMap[T] = make[Input.QueryParameterMap[T], VTree.Leaf[T]] { step => (request, value) => {
+    val encoded = step.mapping.encode(value.x).getOrElse {
       throw new IllegalArgumentException("Could not encode value")
     }
     val extended: Query = Query(request.uri.query() ++ encoded: _*)
@@ -93,8 +92,8 @@ object RequestEncoder {
   }
   }
 
-  implicit val encodeAddHeader = make[Input.AddHeader, String] { step => (request, value) =>
-    val encoded = HttpHeader.parse(step.name, value) match {
+  implicit val encodeAddHeader = make[Input.AddHeader, VTree.Leaf[String]] { step => (request, value) =>
+    val encoded = HttpHeader.parse(step.name, value.x) match {
       case v: ParsingResult.Ok => v.header
       case e: ParsingResult.Error =>
         throw new IllegalArgumentException(s"Invalid header ${e.errors}")
@@ -102,14 +101,13 @@ object RequestEncoder {
     request.addHeader(encoded)
   }
 
-  implicit def encodeMultipart[Parts <: HList, PartArgumentsH <: HList, PartArguments](
+  implicit def encodeMultipart[Parts <: HList, PartArgumentsV <: VTree](
     implicit
-    aux: MultipartEncoder.Aux[Parts, PartArgumentsH],
-    simpleArgumentLister: SimpleArgumentLister.Aux[PartArgumentsH, PartArguments]
-  ) = make[Input.Multipart[Parts], PartArguments] { step =>
+    aux: MultipartEncoder.Aux[Parts, PartArgumentsV]
+  ) = make[Input.Multipart[Parts], PartArgumentsV] { step =>
     val prepared = aux.build(step.parts)
     (request, values) => {
-      val parts = prepared(Nil, simpleArgumentLister.lift(values))
+      val parts = prepared(Nil, values)
       val entity = Multipart.FormData(parts: _*).toEntity()
       request.withEntity(entity)
     }
@@ -117,33 +115,34 @@ object RequestEncoder {
 
   implicit def encodeMappedInput[A, B, T <: TypedInput[A], V](
     implicit
-    aux: RequestEncoder.Aux[T, A]
-  ) = make[Input.MappedInput[A, B, T], B] { step =>
+    aux: RequestEncoder.Aux[T, VTree.Leaf[A]]
+  ) = make[Input.MappedInput[A, B, T], VTree.Leaf[B]] { step =>
     val prepared = aux.build(step.original)
     (request, value) => {
-      val mapped = step.mapping.encode(value).getOrElse {
+      val mapped = step.mapping.encode(value.x).getOrElse {
         throw new IllegalArgumentException(s"Could not encode value")
       }
-      prepared(request, mapped)
+      prepared(request, VTree.Leaf(mapped))
     }
   }
 
-  implicit val encodeNil = makeSimple[HNil, HNil] {
+  implicit val encodeNil = makeSimple[HNil, VTree.Empty] {
     case (request, _, __) =>
       request
   }
 
-  implicit def encodeElem[H, T <: HList, X <: HList](
+  implicit def encodeElem[H, T <: HList, HC <: VTree, TC <: VTree](
     implicit
-    h: RequestEncoder[H],
-    aux: RequestEncoder.Aux[T, X]
-  ) = make[H :: T, h.Input :: X] { step =>
-    val tailPrepared = aux.build(step.tail)
+    h: RequestEncoder.Aux[H, HC],
+    aux: RequestEncoder.Aux[T, TC]
+  ) = make[H :: T, VTree.Branch[HC, TC]] { step =>
     val headPrepared = h.build(step.head)
+    val tailPrepared = aux.build(step.tail)
+
     (request, value) => {
-      val requestAfterTail = tailPrepared(request, value.tail)
-      val result = headPrepared(requestAfterTail, value.head)
-      result
+      val requestAfterHead = headPrepared(request, value.l)
+      val requestAfterTail = tailPrepared(requestAfterHead, value.r)
+      requestAfterTail
     }
   }
 }
