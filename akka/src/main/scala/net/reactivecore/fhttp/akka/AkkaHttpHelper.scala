@@ -50,28 +50,4 @@ private[akka] object AkkaHttpHelper {
         }
       }
   }
-
-  def jsonUnmarshaller[T: Decoder]: Unmarshaller[HttpEntity, T] = {
-    Unmarshaller.byteStringUnmarshaller
-      .forContentTypes(
-        ContentTypes.`application/json`
-      )
-      .map { byteString =>
-        if (byteString.isEmpty) {
-          throw Unmarshaller.NoContentException
-        } else {
-          val maybeObject = for {
-            json <- io.circe.jawn.parseByteBuffer(byteString.asByteBuffer)
-            parsedObject <- json.as[T]
-          } yield {
-            parsedObject
-          }
-          maybeObject match {
-            case Left(error) => throw error
-            case Right(ok)   => ok
-          }
-        }
-      }
-  }
-
 }
