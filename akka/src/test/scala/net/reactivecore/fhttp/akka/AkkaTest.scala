@@ -246,5 +246,7 @@ class AkkaTest extends TestBase {
       val t1 = System.currentTimeMillis()
       println(s"Executed ${count} in ${t1 - t0}ms, ${(t1 - t0) / count.toFloat}ms/req")
     }
+
+    await(server.close())
   }
 }

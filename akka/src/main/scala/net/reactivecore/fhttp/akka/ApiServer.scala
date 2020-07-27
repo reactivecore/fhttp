@@ -1,12 +1,13 @@
 package net.reactivecore.fhttp.akka
 
 import akka.actor.ActorSystem
+import akka.http.scaladsl.Http.HttpTerminated
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.{ Http, HttpExt }
 import akka.http.scaladsl.server.Route
 import akka.stream.Materializer
 
-import scala.concurrent.{ Await, ExecutionContext }
+import scala.concurrent.{ Await, ExecutionContext, Future }
 import scala.concurrent.duration._
 import scala.collection.immutable
 
@@ -24,7 +25,7 @@ class ApiServer(
 
   println(s"Server listening on ${interface}:${port}")
 
-  def close(): Unit = {
+  def close(): Future[HttpTerminated] = {
     bindResult.terminate(HttpUpDownTimeout)
   }
 
