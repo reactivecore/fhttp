@@ -24,6 +24,8 @@ ThisBuild / developers := List(
   Developer(id="nob13", name="Norbert Schultz", email="norbert.schultz@reactivecore.de", url=url("https://www.reactivecore.de"))
 )
 
+usePgpKeyHex("77D0E9E04837F8CBBCD56429897A43978251C225")
+
 import scalariform.formatter.preferences._
 val scalariformSettings = {
   scalariformPreferences := scalariformPreferences.value
