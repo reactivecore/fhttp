@@ -27,5 +27,5 @@ object Output {
   case class ErrorSuccess[Failure <: Output, Success <: Output](f: Failure, s: Success) extends TypedOutput[Either[_, _]]
 
   def text(limit: Option[Long] = None): MappedPayload[String] = MappedPayload(TextMapping, limit)
-  def circe[T](limit: Option[Long] = None)(implicit encoder: Encoder[T], decoder: Decoder[T]): MappedPayload[T] = MappedPayload(CirceJsonMapping[T], limit)
+  def circe[T](limit: Option[Long] = None)(implicit encoder: Encoder[T], decoder: Decoder[T]): MappedPayload[T] = MappedPayload(CirceJsonMapping[T](), limit)
 }

@@ -14,7 +14,7 @@ import scala.concurrent.{ ExecutionContext, Future }
 
 class ApiClient(requestExecutor: RequestExecutor, rootUri: Uri)(implicit ec: ExecutionContext, materializer: Materializer) {
 
-  def this(httpExt: HttpExt, rootUri: Uri)(implicit ec: ExecutionContext, materializer: Materializer) {
+  def this(httpExt: HttpExt, rootUri: Uri)(implicit ec: ExecutionContext, materializer: Materializer) = {
     this(httpExt.singleRequest(_), rootUri)
   }
 

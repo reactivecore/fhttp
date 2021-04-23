@@ -31,7 +31,7 @@ private[akka] object AkkaHttpHelper {
   }
 
   def forceContentType(name: String): ContentType = {
-    ContentType.parse(name).right.getOrElse {
+    ContentType.parse(name).getOrElse {
       throw new IllegalArgumentException(s"Invalid content type ${name}")
     }
   }

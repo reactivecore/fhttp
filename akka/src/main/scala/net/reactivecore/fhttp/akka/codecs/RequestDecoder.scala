@@ -41,7 +41,7 @@ object RequestDecoder {
       {
         import context._
         f(context).map {
-          _.right.map {
+          _.map {
             case (context, value) =>
               context -> m(value)
           }
@@ -181,7 +181,7 @@ object RequestDecoder {
     requestContext => {
       import requestContext._
       built(requestContext).map {
-        _.right.map {
+        _.map {
           case (context, value) =>
             val encodedValue = step.mapping.decode(value.x).getOrElse {
               throw new IllegalArgumentException("Could not encode value")
@@ -211,7 +211,7 @@ object RequestDecoder {
         case Left(bad) => FastFuture.successful(Left(bad))
         case Right((afterHeadRequest, afterHeadResult1)) =>
           tailPrepared(afterHeadRequest).map {
-            _.right.map {
+            _.map {
               case (afterTailRequest, afterTailResult) =>
                 val finalValue = VTree.Branch(afterHeadResult1, afterTailResult)
                 afterTailRequest -> finalValue

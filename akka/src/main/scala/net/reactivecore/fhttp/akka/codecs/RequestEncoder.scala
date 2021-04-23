@@ -63,7 +63,7 @@ object RequestEncoder {
     case (request, step, value) =>
       val extended: Query = Query(request.uri.query() :+ (step.name -> value.x): _*)
       val uri = request.uri.withQuery(extended)
-      request.copy(uri = uri)
+      request.withUri(uri)
   }
 
   implicit def encodeMapped[T] = make[Input.MappedPayload[T], VTree.Leaf[T]] { step =>
@@ -88,7 +88,7 @@ object RequestEncoder {
     }
     val extended: Query = Query(request.uri.query() ++ encoded: _*)
     val uri = request.uri.withQuery(extended)
-    request.copy(uri = uri)
+    request.withUri(uri)
   }
   }
 

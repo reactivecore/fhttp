@@ -20,7 +20,7 @@ class ApiServer(
   private val HttpUpDownTimeout = 60.seconds
 
   private val http = Http()
-  private val bindFuture = http.bindAndHandle(route, interface, port)
+  private val bindFuture = http.newServerAt(interface, port).bind(route)
   private val bindResult = Await.result(bindFuture, HttpUpDownTimeout)
 
   println(s"Server listening on ${interface}:${port}")
