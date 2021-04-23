@@ -24,7 +24,7 @@ abstract class TestBase extends FlatSpec with Matchers with BeforeAndAfterAll {
 
   override protected def beforeAll(): Unit = {
     _actorSystem = ActorSystem("test")
-    _materializer = ActorMaterializer()
+    _materializer = Materializer.apply(_actorSystem)
     _http = Http()
   }
 

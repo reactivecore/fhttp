@@ -2,7 +2,7 @@ package com.example.helloworld
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
-import akka.stream.ActorMaterializer
+import akka.stream.{ ActorMaterializer, Materializer }
 import net.reactivecore.fhttp.akka.ApiClient
 import shapeless.HNil
 
@@ -14,7 +14,7 @@ object HelloWorldClient extends App {
 
   implicit val actorSystem = ActorSystem()
   implicit val ec: ExecutionContext = actorSystem.dispatcher
-  implicit val materializer = ActorMaterializer()
+  implicit val materializer = Materializer.apply(actorSystem)
   val http = Http()
   val client = new ApiClient(http, "http://localhost:9000") {
     val version = prepare(HelloWorldApi.version)
