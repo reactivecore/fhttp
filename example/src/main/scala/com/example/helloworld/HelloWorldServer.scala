@@ -1,14 +1,14 @@
 package com.example.helloworld
 
 import akka.actor.ActorSystem
-import akka.stream.ActorMaterializer
+import akka.stream.{ ActorMaterializer, Materializer }
 import net.reactivecore.fhttp.akka.{ ApiServer, ApiServerRoute, RouteBuilder }
 
 import scala.concurrent.{ ExecutionContext, Future }
 
 object HelloWorldServer extends App {
   implicit val ac = ActorSystem()
-  implicit val mat = ActorMaterializer()
+  implicit val mat = Materializer.apply(ac)
   implicit def ec: ExecutionContext = ac.dispatcher
 
   val route = new ApiServerRoute {

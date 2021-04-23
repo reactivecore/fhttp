@@ -1,21 +1,23 @@
+lazy val scala212 = "2.12.13"
+lazy val scala213 = "2.13.5"
+lazy val supportedScalaVersions = List(scala212, scala213)
+
 ThisBuild / organization := "net.reactivecore"
-ThisBuild / version := "0.2.2"
-ThisBuild / scalaVersion := "2.12.8"
-// ThisBuild / scalacOptions += "-Xfatal-warnings" // this breaks the doc target due https://github.com/scala/bug/issues/10134
+ThisBuild / version := "0.3-SNAPSHOT"
+ThisBuild / scalaVersion := scala212
 ThisBuild / scalacOptions += "-feature"
 ThisBuild / scalacOptions += "-deprecation"
-ThisBuild / scalacOptions += "-Ypartial-unification" // Needed for Cats
-ThisBuild / updateOptions := updateOptions.value.withGigahorse(false) // See https://github.com/sbt/sbt/issues/3570
 
-val akkaVersion = "2.5.20"
-val akkaHttpVersion = "10.1.7"
-val scalaTestVersion = "3.0.5"
-val circeVersion = "0.11.1"
-val shapelessVersion = "2.3.3"
+val akkaVersion = "2.6.14"
+val akkaHttpVersion = "10.2.4"
+val scalaTestVersion = "3.0.9"
+val circeVersion = "0.13.0"
+val shapelessVersion = "2.3.4"
+val macroParadiseVersion = "2.1.1"
 
 // Releasing settings
 ThisBuild / publishTo := sonatypePublishTo.value
-ThisBuild / publishMavenStyle := true
+// ThisBuild / publishMavenStyle := true
 ThisBuild / licenses := Seq("APL2" -> url("http://www.apache.org/licenses/LICENSE-2.0.txt"))
 ThisBuild / homepage := Some(url("https://github.com/reactivecore/fhttp"))
 ThisBuild / developers := List(
@@ -30,7 +32,26 @@ val scalariformSettings = {
     .setPreference(DanglingCloseParenthesis, Preserve)
 }
 
-def paradiseSupport = addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
+/** Returns yes if Scala version is < 2.13, no otherwise */
+def priorTo213[T](scalaVersion: String)(yes: T*)(no: T*): Seq[T] = {
+  CrossVersion.partialVersion(scalaVersion) match {
+    case Some((2, minor)) if minor < 13 => yes
+    case _                              => no
+  }
+}
+
+lazy val compilerDependentSettings: Seq[Setting[_]] = Seq(
+  libraryDependencies ++=
+    Seq(
+      scalaOrganization.value % "scala-compiler" % scalaVersion.value % Provided,
+      scalaOrganization.value % "scala-reflect" % scalaVersion.value % Provided
+    ) ++ priorTo213(scalaVersion.value) (compilerPlugin(("org.scalamacros" % "paradise" % macroParadiseVersion).cross(CrossVersion.patch)))(),
+  scalacOptions ++= priorTo213(scalaVersion.value)(
+    "-Ypartial-unification"
+  )(
+    "-Ymacro-annotations"
+  )
+)
 
 lazy val core = (project in file("lib"))
   .settings(
@@ -41,10 +62,10 @@ lazy val core = (project in file("lib"))
 
       // For JSON
       "io.circe" %% "circe-generic" % circeVersion,
-      "io.circe" %% "circe-parser" % circeVersion,
-      "io.circe" %% "circe-java8" % circeVersion,
+      "io.circe" %% "circe-parser" % circeVersion
     ),
-    scalariformSettings
+    scalariformSettings,
+    crossScalaVersions := supportedScalaVersions
   )
 
 lazy val akka = (project in file("akka"))
@@ -59,8 +80,9 @@ lazy val akka = (project in file("akka"))
         "org.scalatest" %% "scalatest" % scalaTestVersion % Test
       ),
       scalariformSettings,
-      paradiseSupport
+      crossScalaVersions := supportedScalaVersions
     )
+  .settings(compilerDependentSettings)
 
 lazy val example = (project in file("example"))
   .dependsOn(core, akka)
@@ -70,8 +92,9 @@ lazy val example = (project in file("example"))
     publish := {},
     publishLocal := {},
     publishArtifact := false,
-    paradiseSupport
+    crossScalaVersions := Nil
   )
+  .settings(compilerDependentSettings)
 
 lazy val root = (project in file("."))
   .aggregate(core, akka, example)
@@ -80,5 +103,7 @@ lazy val root = (project in file("."))
     publish := {},
     publishLocal := {},
     publishArtifact := false,
-    test := {}
+    test := {},
+    crossScalaVersions := Nil
   )
+  .settings(compilerDependentSettings)

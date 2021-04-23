@@ -59,8 +59,8 @@ object Input {
   }
 
   def text(limit: Option[Long] = None): MappedPayload[String] = MappedPayload(TextMapping, limit)
-  def circe[T](limit: Option[Long] = None)(implicit encoder: Encoder[T], decoder: Decoder[T]): MappedPayload[T] = MappedPayload(CirceJsonMapping[T], limit)
-  def circeQuery[T](implicit encoder: ObjectEncoder[T], decoder: Decoder[T]) = QueryParameterMap(
+  def circe[T](limit: Option[Long] = None)(implicit encoder: Encoder[T], decoder: Decoder[T]): MappedPayload[T] = MappedPayload(CirceJsonMapping[T](), limit)
+  def circeQuery[T](implicit encoder: Encoder.AsObject[T], decoder: Decoder[T]) = QueryParameterMap(
     CirceJsonStringMapping()
   )
 

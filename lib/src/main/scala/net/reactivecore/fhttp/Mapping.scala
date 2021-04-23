@@ -45,7 +45,7 @@ case class CirceJsonMapping[T]()(implicit encoder: Encoder[T], decoder: Decoder[
 
 // Mapping used for query encoding
 // Note: only works correctly for objects serializing into string objects.
-case class CirceJsonStringMapping[T]()(implicit encoder: ObjectEncoder[T], decoder: Decoder[T]) extends PureMapping[Map[String, String], T] {
+case class CirceJsonStringMapping[T]()(implicit encoder: Encoder.AsObject[T], decoder: Decoder[T]) extends PureMapping[Map[String, String], T] {
 
   override def encode(value: T): Either[String, Map[String, String]] = {
     val result = encoder.encodeObject(value).toList.flatMap {
